@@ -91,13 +91,12 @@ data class AudioChannel(
     val cardName: String?,             // 声卡名称（可选）
     val sampleRate: Int?,              // 采样率
     val bitDepth: Int?,                // 位深
-    val deviceType: Int = -1,          // 新增：AudioDeviceInfo.type
-    val source: Source = Source.ANDROID // 新增：数据来源
+    val source: ChannelSource          // 新增：数据来源（无默认值，各构造点显式传入）
 )
 
-enum class Source {
-    ANDROID,   // 通过 AudioManager 获取（主）
-    ALSA       // 通过 /proc/asound/ 获取（辅助）
+enum class ChannelSource {
+    ANDROID,   // 通过 AudioManager 获取（主源，无需 root）
+    ALSA       // 通过 /proc/asound 获取（辅助源）
 }
 ```
 
@@ -127,22 +126,20 @@ private fun mapDeviceType(type: Int): AudioChannelType {
 
 ### 3.4 声道配置判断（新逻辑）
 
-使用 `AudioDeviceInfo.channelMasks` 获取可靠的声道配置：
+`channelMasks` 是设备支持的声道配置掩码数组，每个掩码中置位的 bit 数即该配置的声道数。
+（旧方案 `AudioDeviceInfo.getChannelCountFromMask` 在 compileSdk 36 公开 API 中不存在，已弃用。）
+故对每个掩码用 `Integer.bitCount` 求声道数，取最大值：
 
 ```kotlin
 private fun inferChannelConfig(device: AudioDeviceInfo): ChannelConfig {
-    if (device.channelMasks.isEmpty()) {
-        return ChannelConfig.UNKNOWN
-    }
-
-    val primaryMask = device.channelMasks[0]
-    val channelCount = AudioDeviceInfo.getChannelCountFromMask(primaryMask)
-
+    val masks = device.channelMasks
+    if (masks.isEmpty()) return ChannelConfig.UNKNOWN
+    val maxChannelCount = masks.maxOf { Integer.bitCount(it) }
     return when {
-        channelCount >= 8 -> ChannelConfig.SURROUND_7_1
-        channelCount >= 6 -> ChannelConfig.SURROUND_5_1
-        channelCount == 2 -> ChannelConfig.STEREO
-        channelCount == 1 -> ChannelConfig.MONO
+        maxChannelCount >= 8 -> ChannelConfig.SURROUND_7_1
+        maxChannelCount >= 6 -> ChannelConfig.SURROUND_5_1
+        maxChannelCount >= 2 -> ChannelConfig.STEREO
+        maxChannelCount >= 1 -> ChannelConfig.MONO
         else -> ChannelConfig.UNKNOWN
     }
 }
@@ -166,10 +163,10 @@ private fun mergeChannels(
         }
     }
 
-    // ALSA 作为补充：添加 Android 未覆盖的设备
+    // ALSA 作为补充：添加 Android 未覆盖的设备（source 已在各自构造点确定，此处不再覆写）
     alsaChannels.forEach { channel ->
         if (channel.isValid && channel.id !in seenIds) {
-            result.add(channel.copy(source = Source.ALSA))
+            result.add(channel)
             seenIds.add(channel.id)
         }
     }
@@ -193,19 +190,21 @@ private fun mergeChannels(
 
 ---
 
-## 5. 文件修改清单
+## 5. 文件修改清单（实际实现）
 
 | 文件 | 操作 | 说明 |
 |------|------|------|
-| `domain/model/AudioChannel.kt` | 修改 | 新增 `deviceType` 和 `source` 字段 |
-| `domain/model/AudioChannelType.kt` | 保持 | 无需修改 |
-| `domain/model/ChannelConfig.kt` | 保持 | 无需修改 |
-| `data/repository/AudioChannelRepositoryImpl.kt` | 修改 | 改为 AudioManager 优先 |
-| `data/scanner/ALSAScanner.kt` | 修改 | 添加异常处理，降级为辅助 |
+| `domain/model/AudioChannel.kt` | 修改 | 新增 `source` 字段（无默认值） |
+| `domain/model/ChannelSource.kt` | 新增 | `ChannelSource` 枚举（ANDROID/ALSA） |
+| `data/repository/AudioChannelRepositoryImpl.kt` | 修改 | 声道判定改用 `Integer.bitCount(mask)`；Android 源标记 `source=ANDROID` |
+| `data/scanner/ALSAScanner.kt` | 修改 | 3 处构造标记 `source=ALSA`；4 个纯解析方法改 `internal` 便于测试 |
 | `domain/usecase/GetAudioChannelsUseCase.kt` | 保持 | 无需修改 |
-| `ui/viewmodel/MainViewModel.kt` | 保持 | 无需修改 |
-| `ui/screens/MainScreen.kt` | 保持 | 无需修改 |
-| `AndroidManifest.xml` | 修改 | 添加必要权限 |
+| `ui/viewmodel/MainViewModel.kt` | 修改 | 新增 `selectedChannel` 状态、`buildShareText()` |
+| `ui/screens/MainScreen.kt` | 修改 | `collectAsStateWithLifecycle`；分享按钮；通道详情 `ModalBottomSheet` |
+| `ui/components/AudioChannelCard.kt` | 修改 | 卡片可点击；新增 `SourceChip` |
+| `app/build.gradle.kts` | 修改 | 新增 `lifecycle-runtime-compose`、`testImplementation(junit)` |
+| `app/src/test/.../ALSAScannerTest.kt` | 新增 | ALSAScanner 纯函数单元测试（13 例） |
+| `AndroidManifest.xml` | 保持 | 未新增权限（分享用 ACTION_SEND 无需权限） |
 
 ---
 

@@ -24,18 +24,20 @@
 
 ### 3.1 核心功能
 
-- [ ] **音频通道扫描**: 自动扫描并枚举车机上所有音频输入/输出通道
-- [ ] **通道类型识别**: 根据通道名称和属性判断是媒体/导航/语音/系统通道
-- [ ] **声道配置检测**: 识别单声道、双声道(立体声)、5.1环绕声
-- [ ] **通道状态显示**: 显示通道是否有效、是否正在使用
-- [ ] **设备路径显示**: 显示 ALSA 设备节点路径
+- [x] **音频通道扫描**: 自动扫描并枚举车机上所有音频输入/输出通道
+- [x] **通道类型识别**: 根据通道名称和属性判断是媒体/导航/语音/系统通道
+- [x] **声道配置检测**: 识别单声道、双声道(立体声)、5.1环绕声
+- [x] **通道状态显示**: 显示通道是否有效、是否正在使用
+- [x] **设备路径显示**: 显示 ALSA 设备节点路径
 
 ### 3.2 用户界面
 
-- [ ] **通道列表视图**: 以列表形式展示所有检测到的通道
-- [ ] **通道详情卡片**: 每个通道显示详细信息（类型、声道配置、设备路径）
-- [ ] **刷新功能**: 支持手动刷新通道列表
-- [ ] **过滤功能**: 支持按通道类型过滤显示
+- [x] **通道列表视图**: 以列表形式展示所有检测到的通道
+- [x] **通道详情卡片**: 每个通道显示详细信息（类型、声道配置、设备路径）
+- [x] **刷新功能**: 支持手动刷新通道列表
+- [x] **过滤功能**: 支持按通道类型过滤显示
+- [x] **通道详情页**: 点击卡片弹出 ModalBottomSheet 展示完整字段（来源、活跃、采样率、位深等）
+- [x] **检测结果分享**: 经系统分享面板（Intent.ACTION_SEND）导出纯文本报告，无需新权限
 
 ## 4. 数据模型
 
@@ -50,8 +52,14 @@ data class AudioChannel(
     val devicePath: String?,          // ALSA 设备路径
     val cardName: String?,             // 声卡名称
     val sampleRate: Int?,             // 采样率
-    val bitDepth: Int?                // 位深
+    val bitDepth: Int?,               // 位深
+    val source: ChannelSource         // 数据来源（ANDROID 公开 API / ALSA 节点）
 )
+
+enum class ChannelSource {
+    ANDROID,   // 通过 AudioManager 获取（主源，无需 root）
+    ALSA       // 通过 /proc/asound 获取（辅助源）
+}
 
 enum class AudioChannelType {
     MEDIA,          // 媒体通道
@@ -95,8 +103,8 @@ enum class ChannelConfig {
 
 ### 5.3 声道配置识别
 
-- 读取 `/proc/asound/pcm` 中的通道数信息
-- 解析设备名称中的 channel count 标记（如 2ch, 6ch）
+- **Android 源**：`AudioDeviceInfo.channelMasks` 中每个掩码的置位位数（`Integer.bitCount(mask)`）即声道数，取所有支持配置的最大值映射（MONO/STEREO/5.1/7.1）
+- **ALSA 源**：解析 `/proc/asound/pcm` 中的 `N channels` 长格式，回退到设备名的 `Nch` 短格式（如 2ch、6ch）
 
 ## 6. 项目结构
 

@@ -4,6 +4,7 @@ import android.util.Log
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
+import com.byd.audiochanneldetector.domain.model.ChannelSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -70,7 +71,8 @@ class ALSAScanner @Inject constructor() {
                     devicePath = "/dev/snd/pcmC$index",
                     cardName = id,
                     sampleRate = null,
-                    bitDepth = null
+                    bitDepth = null,
+                    source = ChannelSource.ALSA
                 )
             )
         }
@@ -95,7 +97,8 @@ class ALSAScanner @Inject constructor() {
                     devicePath = devicePath,
                     cardName = name,
                     sampleRate = extractSampleRate(details),
-                    bitDepth = extractBitDepth(details)
+                    bitDepth = extractBitDepth(details),
+                    source = ChannelSource.ALSA
                 )
             )
         }
@@ -105,7 +108,7 @@ class ALSAScanner @Inject constructor() {
      * SPEC §5.3：先识别 /proc/asound/pcm details 中的 "N channels" 长格式（精度更高），
      * 未命中再回退到设备名/详情中的 "Nch" 短格式（如 "2ch"、"6ch"）。
      */
-    private fun resolveChannelConfig(details: String, name: String): ChannelConfig {
+    internal fun resolveChannelConfig(details: String, name: String): ChannelConfig {
         // 长格式优先
         when {
             details.contains("6 channels") -> return ChannelConfig.SURROUND_5_1
@@ -173,7 +176,8 @@ class ALSAScanner @Inject constructor() {
                                     devicePath = file.absolutePath,
                                     cardName = "card$card",
                                     sampleRate = null,
-                                    bitDepth = null
+                                    bitDepth = null,
+                                    source = ChannelSource.ALSA
                                 )
                             )
                         }
@@ -197,7 +201,7 @@ class ALSAScanner @Inject constructor() {
      * - SYSTEM      : system / ui / notification
      * - ALARM       : alarm / ringtone / alert
      */
-    private fun inferChannelType(name: String): AudioChannelType {
+    internal fun inferChannelType(name: String): AudioChannelType {
         val lowerName = name.lowercase()
         return when {
             lowerName.contains("media") || lowerName.contains("music") ||
@@ -224,12 +228,12 @@ class ALSAScanner @Inject constructor() {
         }
     }
 
-    private fun extractSampleRate(details: String): Int? {
+    internal fun extractSampleRate(details: String): Int? {
         val rateRegex = """(\d+)\s*kHz""".toRegex()
         return rateRegex.find(details)?.groupValues?.get(1)?.toIntOrNull()?.times(1000)
     }
 
-    private fun extractBitDepth(details: String): Int? {
+    internal fun extractBitDepth(details: String): Int? {
         val bitRegex = """(\d+)\s*bit""".toRegex()
         return bitRegex.find(details)?.groupValues?.get(1)?.toIntOrNull()
     }

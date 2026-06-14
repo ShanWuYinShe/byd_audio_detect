@@ -1,6 +1,7 @@
 package com.byd.audiochanneldetector.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -14,11 +15,13 @@ import androidx.compose.ui.unit.dp
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
+import com.byd.audiochanneldetector.domain.model.ChannelSource
 import com.byd.audiochanneldetector.ui.theme.*
 
 @Composable
 fun AudioChannelCard(
     channel: AudioChannel,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val typeColor = when (channel.type) {
@@ -31,7 +34,9 @@ fun AudioChannelCard(
     }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -76,6 +81,8 @@ fun AudioChannelCard(
                     ChannelTypeChip(type = channel.type)
                     Spacer(modifier = Modifier.width(8.dp))
                     ChannelConfigChip(config = channel.channelConfig)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    SourceChip(source = channel.source)
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -153,6 +160,24 @@ fun ChannelConfigChip(config: ChannelConfig) {
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+fun SourceChip(source: ChannelSource) {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+    ) {
+        Text(
+            text = when (source) {
+                ChannelSource.ANDROID -> "Android"
+                ChannelSource.ALSA -> "ALSA"
+            },
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.secondary
         )
     }
 }

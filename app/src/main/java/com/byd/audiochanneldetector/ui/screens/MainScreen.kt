@@ -1,20 +1,28 @@
 package com.byd.audiochanneldetector.ui.screens
 
+import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
+import com.byd.audiochanneldetector.domain.model.ChannelConfig
+import com.byd.audiochanneldetector.domain.model.ChannelSource
 import com.byd.audiochanneldetector.ui.components.AudioChannelCard
 import com.byd.audiochanneldetector.ui.viewmodel.MainViewModel
 
@@ -23,7 +31,8 @@ import com.byd.audiochanneldetector.ui.viewmodel.MainViewModel
 fun MainScreen(
     viewModel: MainViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -42,6 +51,25 @@ fun MainScreen(
                     }
                 },
                 actions = {
+                    // 分享检测结果：经系统分享面板 ACTION_SEND 导出纯文本报告，无需任何权限
+                    IconButton(
+                        onClick = {
+                            val shareText = viewModel.buildShareText()
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                            }
+                            context.startActivity(
+                                Intent.createChooser(sendIntent, "分享检测结果")
+                            )
+                        },
+                        enabled = uiState.channels.isNotEmpty()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "分享检测结果"
+                        )
+                    }
                     IconButton(
                         onClick = { viewModel.loadChannels() },
                         enabled = !uiState.isLoading
@@ -131,12 +159,89 @@ fun MainScreen(
                             items = uiState.filteredChannels,
                             key = { it.id }
                         ) { channel ->
-                            AudioChannelCard(channel = channel)
+                            AudioChannelCard(
+                                channel = channel,
+                                onClick = { viewModel.selectChannel(channel) }
+                            )
                         }
                     }
                 }
             }
         }
+    }
+
+    // 通道详情：点击卡片后弹出 ModalBottomSheet，展示完整信息
+    val selected = uiState.selectedChannel
+    if (selected != null) {
+        ChannelDetailSheet(
+            channel = selected,
+            onDismiss = { viewModel.selectChannel(null) }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChannelDetailSheet(
+    channel: AudioChannel,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Text(
+                text = channel.name,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = channel.id,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            DetailRow(label = "通道类型", value = typeText(channel.type))
+            DetailRow(label = "声道配置", value = configText(channel.channelConfig))
+            DetailRow(label = "数据来源", value = sourceText(channel.source))
+            DetailRow(label = "是否有效", value = if (channel.isValid) "是" else "否")
+            DetailRow(label = "是否活跃", value = if (channel.isActive) "是（正在使用）" else "否")
+            channel.devicePath?.let { DetailRow(label = "设备路径", value = it) }
+            channel.cardName?.let { DetailRow(label = "声卡名称", value = it) }
+            channel.sampleRate?.let { DetailRow(label = "采样率", value = "${it}Hz") }
+            channel.bitDepth?.let { DetailRow(label = "位深", value = "${it}bit") }
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
@@ -217,4 +322,26 @@ fun StatItem(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
     }
+}
+
+private fun typeText(type: AudioChannelType): String = when (type) {
+    AudioChannelType.MEDIA -> "媒体"
+    AudioChannelType.NAVIGATION -> "导航"
+    AudioChannelType.VOICE_CALL -> "语音通话"
+    AudioChannelType.SYSTEM -> "系统"
+    AudioChannelType.ALARM -> "警报"
+    AudioChannelType.UNKNOWN -> "未知"
+}
+
+private fun configText(config: ChannelConfig): String = when (config) {
+    ChannelConfig.MONO -> "单声道"
+    ChannelConfig.STEREO -> "立体声"
+    ChannelConfig.SURROUND_5_1 -> "5.1 环绕"
+    ChannelConfig.SURROUND_7_1 -> "7.1 环绕"
+    ChannelConfig.UNKNOWN -> "未知"
+}
+
+private fun sourceText(source: ChannelSource): String = when (source) {
+    ChannelSource.ANDROID -> "Android 公开 API（无需 root）"
+    ChannelSource.ALSA -> "ALSA /proc 节点（辅助，可能需 root）"
 }

@@ -8,6 +8,7 @@ import com.byd.audiochanneldetector.data.scanner.ALSAScanner
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
+import com.byd.audiochanneldetector.domain.model.ChannelSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -56,7 +57,8 @@ class AudioChannelRepositoryImpl @Inject constructor(
                 devicePath = null,
                 cardName = null,
                 sampleRate = device.sampleRates.firstOrNull(),
-                bitDepth = null
+                bitDepth = null,
+                source = ChannelSource.ANDROID
             )
         }
     }
@@ -105,14 +107,17 @@ class AudioChannelRepositoryImpl @Inject constructor(
     }
 
     private fun inferChannelConfig(device: AudioDeviceInfo): ChannelConfig {
-        // 根据声道数量判断声道配置
+        // channelMasks 是设备支持的声道配置掩码数组，每个掩码中置位的 bit 数即为该配置的声道数
+        // （本机 android-36 实测：CHANNEL_OUT_MONO=4→1 声道、STEREO=12→2、5POINT1=252→6、7POINT1=1020→8）。
+        // 故用 Integer.bitCount 求声道数；旧实现误用 masks.size（仅表示"支持几种配置"）导致声道判断错误。
         val masks = device.channelMasks
-        val count = masks.size
+        if (masks.isEmpty()) return ChannelConfig.UNKNOWN
+        val maxChannelCount = masks.maxOf { Integer.bitCount(it) }
         return when {
-            count >= 8 -> ChannelConfig.SURROUND_7_1
-            count >= 6 -> ChannelConfig.SURROUND_5_1
-            count >= 2 -> ChannelConfig.STEREO
-            count >= 1 -> ChannelConfig.MONO
+            maxChannelCount >= 8 -> ChannelConfig.SURROUND_7_1
+            maxChannelCount >= 6 -> ChannelConfig.SURROUND_5_1
+            maxChannelCount >= 2 -> ChannelConfig.STEREO
+            maxChannelCount >= 1 -> ChannelConfig.MONO
             else -> ChannelConfig.UNKNOWN
         }
     }

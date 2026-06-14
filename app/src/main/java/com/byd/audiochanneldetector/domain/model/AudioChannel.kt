@@ -10,5 +10,6 @@ data class AudioChannel(
     val devicePath: String?,           // ALSA 设备路径
     val cardName: String?,              // 声卡名称
     val sampleRate: Int?,              // 采样率
-    val bitDepth: Int?                 // 位深
+    val bitDepth: Int?,                // 位深
+    val source: ChannelSource          // 数据来源（Android 公开 API / ALSA 节点）
 )
