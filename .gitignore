@@ -1,0 +1,22 @@
+# ----- Gradle / Android -----
+.gradle/
+build/
+/captures
+.cxx/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+*.iml
+
+# ----- IDE / 编辑器 -----
+.idea/
+.vscode/
+*.swp
+
+# ----- 操作系统 -----
+.DS_Store
+
+# ----- Claude Code Worktree 元数据 -----
+.claude/worktrees/

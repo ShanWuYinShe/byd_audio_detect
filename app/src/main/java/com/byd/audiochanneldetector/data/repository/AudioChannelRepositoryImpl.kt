@@ -1,0 +1,206 @@
+package com.byd.audiochanneldetector.data.repository
+
+import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Build
+import com.byd.audiochanneldetector.data.scanner.ALSAScanner
+import com.byd.audiochanneldetector.domain.model.AudioChannel
+import com.byd.audiochanneldetector.domain.model.AudioChannelType
+import com.byd.audiochanneldetector.domain.model.ChannelConfig
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class AudioChannelRepositoryImpl @Inject constructor(
+    @param:ApplicationContext private val context: Context,
+    private val alsaScanner: ALSAScanner,
+    private val audioManager: AudioManager
+) : AudioChannelRepository {
+
+    override fun getAudioChannels(): Flow<List<AudioChannel>> = flow {
+        // 1. 首先获取 Android 系统音频设备
+        val androidChannels = getAndroidAudioDevices()
+
+        // 2. 获取 ALSA 设备
+        val alsaChannels = alsaScanner.scanChannels()
+
+        // 3. 获取当前活跃播放配置，构造活跃通道标识集合
+        val activeKeys = collectActivePlaybackKeys()
+
+        // 4. 合并并去重，最后基于活跃集合覆写 isActive
+        val mergedChannels = mergeChannels(androidChannels, alsaChannels)
+            .map { it.copy(isActive = resolveIsActive(it, activeKeys)) }
+
+        emit(mergedChannels)
+    }
+
+    private fun getAndroidAudioDevices(): List<AudioChannel> {
+        // 同时枚举输出与输入设备（GET_DEVICES_ALL 在 lint 的 @IntDef 检查下不被接受，
+        // 改为显式按位或，运行时等价）
+        val devices = audioManager.getDevices(
+            AudioManager.GET_DEVICES_OUTPUTS or AudioManager.GET_DEVICES_INPUTS
+        )
+
+        return devices.map { device ->
+            AudioChannel(
+                id = "android-${device.id}",
+                name = device.productName?.toString() ?: "Unknown Device",
+                type = inferAndroidChannelType(device),
+                channelConfig = inferChannelConfig(device),
+                isActive = false,
+                isValid = true,
+                devicePath = null,
+                cardName = null,
+                sampleRate = device.sampleRates.firstOrNull(),
+                bitDepth = null
+            )
+        }
+    }
+
+    /**
+     * 基于 AudioDeviceInfo.type 推断通道类型。覆盖比亚迪车机常见的设备类别：
+     * 输出（扬声器/耳机/HDMI/蓝牙 A2DP/BLE/USB/AUX/LINE/DOCK/FM/IP/SUBMIX）→ MEDIA
+     * 输入（内置 MIC/SCO/BLE_HEADSET）→ VOICE_CALL
+     * TELEPHONY → VOICE_CALL；BUS（车机内部总线）→ SYSTEM
+     */
+    private fun inferAndroidChannelType(device: AudioDeviceInfo): AudioChannelType {
+        return when (device.type) {
+            // 媒体输出
+            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER,
+            AudioDeviceInfo.TYPE_BUILTIN_EARPIECE,
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_USB_DEVICE,
+            AudioDeviceInfo.TYPE_USB_ACCESSORY,
+            AudioDeviceInfo.TYPE_USB_HEADSET,
+            AudioDeviceInfo.TYPE_AUX_LINE,
+            AudioDeviceInfo.TYPE_LINE_ANALOG,
+            AudioDeviceInfo.TYPE_LINE_DIGITAL,
+            AudioDeviceInfo.TYPE_HDMI,
+            AudioDeviceInfo.TYPE_HDMI_ARC,
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_BLE_HEADSET,
+            AudioDeviceInfo.TYPE_BLE_SPEAKER,
+            AudioDeviceInfo.TYPE_DOCK,
+            AudioDeviceInfo.TYPE_FM,
+            AudioDeviceInfo.TYPE_IP,
+            AudioDeviceInfo.TYPE_REMOTE_SUBMIX -> AudioChannelType.MEDIA
+
+            // 语音输入
+            AudioDeviceInfo.TYPE_BUILTIN_MIC,
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> AudioChannelType.VOICE_CALL
+
+            // 通话
+            AudioDeviceInfo.TYPE_TELEPHONY -> AudioChannelType.VOICE_CALL
+
+            // 车机总线
+            AudioDeviceInfo.TYPE_BUS -> AudioChannelType.SYSTEM
+
+            else -> AudioChannelType.UNKNOWN
+        }
+    }
+
+    private fun inferChannelConfig(device: AudioDeviceInfo): ChannelConfig {
+        // 根据声道数量判断声道配置
+        val masks = device.channelMasks
+        val count = masks.size
+        return when {
+            count >= 8 -> ChannelConfig.SURROUND_7_1
+            count >= 6 -> ChannelConfig.SURROUND_5_1
+            count >= 2 -> ChannelConfig.STEREO
+            count >= 1 -> ChannelConfig.MONO
+            else -> ChannelConfig.UNKNOWN
+        }
+    }
+
+    /**
+     * 收集当前正在播放的音频流所在设备的可比对标识。
+     * 使用 address / id / productName 三种 key 形成集合，兼容不同 OEM 的 AudioDeviceInfo 表现差异。
+     *
+     * API 等级约束：
+     * - getActivePlaybackConfigurations() 自 API 26 起可用；
+     * - AudioPlaybackConfiguration.audioDeviceInfo 自 API 31 起可用（公开 API；API 36+ 被标 deprecated
+     *   但仍存在；该 API 的未来公开替代 audioDevices() 当前为 @SystemApi，普通 App 不可用）；
+     * - AudioDeviceInfo.address 自 API 28 起可用。
+     * 故仅 API 31+ 才能拿到"哪台设备在播放"的信息；低于 31 的版本返回空集合，
+     * isActive 将回到 false（UI 诚实呈现"未检测到活跃通道"，不崩溃）。
+     */
+    private fun collectActivePlaybackKeys(): Set<String> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return emptySet()
+        }
+        val configs = runCatching { audioManager.activePlaybackConfigurations }
+            .getOrDefault(emptyList())
+        val keys = mutableSetOf<String>()
+        configs.forEach { config ->
+            @Suppress("DEPRECATION") // audioDeviceInfo 公开 API 持续可用；公开替代 audioDevices 当前为 @SystemApi
+            val device = config.audioDeviceInfo ?: return@forEach
+            keys += "id:${device.id}"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                device.address.takeIf { it.isNotBlank() }?.let { keys += "addr:$it" }
+            }
+            device.productName?.toString()?.takeIf { it.isNotBlank() }?.let { keys += "name:$it" }
+        }
+        return keys
+    }
+
+    /**
+     * 判定通道当前是否活跃：
+     * - Android 源通道（id 形如 "android-${device.id}"）直接用 id 比对；
+     * - ALSA 源通道（cardName/devicePath 携带 cardX、pcmCxDy 信息）尝试用 address 比对。
+     * 未命中时保持 false，不做模糊匹配以避免误判。
+     */
+    private fun resolveIsActive(channel: AudioChannel, activeKeys: Set<String>): Boolean {
+        if (activeKeys.isEmpty()) return false
+
+        // Android 源：id 后缀就是 AudioDeviceInfo.id
+        if (channel.id.startsWith("android-")) {
+            val deviceId = channel.id.removePrefix("android-")
+            if ("id:$deviceId" in activeKeys) return true
+        }
+
+        // 名称比对（适用于 Android 源 + ALSA 源 cardName 命名一致的情形）
+        channel.name.takeIf { it.isNotBlank() }?.let {
+            if ("name:$it" in activeKeys) return true
+        }
+        channel.cardName?.takeIf { it.isNotBlank() }?.let {
+            if ("name:$it" in activeKeys || "addr:$it" in activeKeys) return true
+        }
+
+        // ALSA 源：从 devicePath 提取 cardX 作为 address 兜底
+        channel.devicePath?.let { path ->
+            // 匹配 /dev/snd/pcmC{card}D{device}* 中的 cardX 标记
+            val cardMatch = Regex("""pcmC(\d+)""").find(path)
+            cardMatch?.groupValues?.get(1)?.let { cardIdx ->
+                if ("addr:card$cardIdx" in activeKeys) return true
+            }
+        }
+
+        return false
+    }
+
+    private fun mergeChannels(
+        androidChannels: List<AudioChannel>,
+        alsaChannels: List<AudioChannel>
+    ): List<AudioChannel> {
+        val result = mutableListOf<AudioChannel>()
+        val seenIds = mutableSetOf<String>()
+
+        // 合并并只保留有效的通道
+        val allChannels = androidChannels + alsaChannels
+
+        allChannels.forEach { channel ->
+            // 只添加有效且未重复的通道
+            if (channel.isValid && channel.id !in seenIds) {
+                result.add(channel)
+                seenIds.add(channel.id)
+            }
+        }
+
+        return result.sortedBy { it.type.ordinal }
+    }
+}
