@@ -69,7 +69,7 @@ class ALSAScanner @Inject constructor() {
                     isActive = false, // 占位：由 Repository 基于 getActivePlaybackConfigurations 覆写
                     isValid = isValid,
                     devicePath = "/dev/snd/pcmC$index",
-                    cardName = id,
+                    cardName = name,
                     sampleRate = null,
                     bitDepth = null,
                     source = ChannelSource.ALSA
@@ -95,7 +95,7 @@ class ALSAScanner @Inject constructor() {
                     isActive = false, // 占位：由 Repository 基于 getActivePlaybackConfigurations 覆写
                     isValid = isValid,
                     devicePath = devicePath,
-                    cardName = name,
+                    cardName = null,
                     sampleRate = extractSampleRate(details),
                     bitDepth = extractBitDepth(details),
                     source = ChannelSource.ALSA

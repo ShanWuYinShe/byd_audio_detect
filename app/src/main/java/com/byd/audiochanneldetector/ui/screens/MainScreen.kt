@@ -21,8 +21,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
-import com.byd.audiochanneldetector.domain.model.ChannelConfig
-import com.byd.audiochanneldetector.domain.model.ChannelSource
+import com.byd.audiochanneldetector.ui.DisplayLabels
 import com.byd.audiochanneldetector.ui.components.AudioChannelCard
 import com.byd.audiochanneldetector.ui.viewmodel.MainViewModel
 
@@ -211,9 +210,9 @@ private fun ChannelDetailSheet(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            DetailRow(label = "通道类型", value = typeText(channel.type))
-            DetailRow(label = "声道配置", value = configText(channel.channelConfig))
-            DetailRow(label = "数据来源", value = sourceText(channel.source))
+            DetailRow(label = "通道类型", value = DisplayLabels.typeText(channel.type))
+            DetailRow(label = "声道配置", value = DisplayLabels.configText(channel.channelConfig))
+            DetailRow(label = "数据来源", value = DisplayLabels.sourceText(channel.source))
             DetailRow(label = "是否有效", value = if (channel.isValid) "是" else "否")
             DetailRow(label = "是否活跃", value = if (channel.isActive) "是（正在使用）" else "否")
             channel.devicePath?.let { DetailRow(label = "设备路径", value = it) }
@@ -251,9 +250,10 @@ fun FilterChips(
     onFilterSelected: (AudioChannelType?) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    FlowRow(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         FilterChip(
             selected = selectedFilter == null,
@@ -324,24 +324,4 @@ fun StatItem(label: String, value: String) {
     }
 }
 
-private fun typeText(type: AudioChannelType): String = when (type) {
-    AudioChannelType.MEDIA -> "媒体"
-    AudioChannelType.NAVIGATION -> "导航"
-    AudioChannelType.VOICE_CALL -> "语音通话"
-    AudioChannelType.SYSTEM -> "系统"
-    AudioChannelType.ALARM -> "警报"
-    AudioChannelType.UNKNOWN -> "未知"
-}
 
-private fun configText(config: ChannelConfig): String = when (config) {
-    ChannelConfig.MONO -> "单声道"
-    ChannelConfig.STEREO -> "立体声"
-    ChannelConfig.SURROUND_5_1 -> "5.1 环绕"
-    ChannelConfig.SURROUND_7_1 -> "7.1 环绕"
-    ChannelConfig.UNKNOWN -> "未知"
-}
-
-private fun sourceText(source: ChannelSource): String = when (source) {
-    ChannelSource.ANDROID -> "Android 公开 API（无需 root）"
-    ChannelSource.ALSA -> "ALSA /proc 节点（辅助，可能需 root）"
-}

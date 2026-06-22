@@ -33,8 +33,8 @@ class AudioChannelRepositoryImpl @Inject constructor(
         val activeKeys = collectActivePlaybackKeys()
 
         // 4. 合并并去重，最后基于活跃集合覆写 isActive
-        val mergedChannels = mergeChannels(androidChannels, alsaChannels)
-            .map { it.copy(isActive = resolveIsActive(it, activeKeys)) }
+        val mergedChannels = ChannelMergeLogic.mergeChannels(androidChannels, alsaChannels)
+            .map { it.copy(isActive = ChannelMergeLogic.resolveIsActive(it, activeKeys)) }
 
         emit(mergedChannels)
     }
@@ -151,61 +151,5 @@ class AudioChannelRepositoryImpl @Inject constructor(
             device.productName?.toString()?.takeIf { it.isNotBlank() }?.let { keys += "name:$it" }
         }
         return keys
-    }
-
-    /**
-     * 判定通道当前是否活跃：
-     * - Android 源通道（id 形如 "android-${device.id}"）直接用 id 比对；
-     * - ALSA 源通道（cardName/devicePath 携带 cardX、pcmCxDy 信息）尝试用 address 比对。
-     * 未命中时保持 false，不做模糊匹配以避免误判。
-     */
-    private fun resolveIsActive(channel: AudioChannel, activeKeys: Set<String>): Boolean {
-        if (activeKeys.isEmpty()) return false
-
-        // Android 源：id 后缀就是 AudioDeviceInfo.id
-        if (channel.id.startsWith("android-")) {
-            val deviceId = channel.id.removePrefix("android-")
-            if ("id:$deviceId" in activeKeys) return true
-        }
-
-        // 名称比对（适用于 Android 源 + ALSA 源 cardName 命名一致的情形）
-        channel.name.takeIf { it.isNotBlank() }?.let {
-            if ("name:$it" in activeKeys) return true
-        }
-        channel.cardName?.takeIf { it.isNotBlank() }?.let {
-            if ("name:$it" in activeKeys || "addr:$it" in activeKeys) return true
-        }
-
-        // ALSA 源：从 devicePath 提取 cardX 作为 address 兜底
-        channel.devicePath?.let { path ->
-            // 匹配 /dev/snd/pcmC{card}D{device}* 中的 cardX 标记
-            val cardMatch = Regex("""pcmC(\d+)""").find(path)
-            cardMatch?.groupValues?.get(1)?.let { cardIdx ->
-                if ("addr:card$cardIdx" in activeKeys) return true
-            }
-        }
-
-        return false
-    }
-
-    private fun mergeChannels(
-        androidChannels: List<AudioChannel>,
-        alsaChannels: List<AudioChannel>
-    ): List<AudioChannel> {
-        val result = mutableListOf<AudioChannel>()
-        val seenIds = mutableSetOf<String>()
-
-        // 合并并只保留有效的通道
-        val allChannels = androidChannels + alsaChannels
-
-        allChannels.forEach { channel ->
-            // 只添加有效且未重复的通道
-            if (channel.isValid && channel.id !in seenIds) {
-                result.add(channel)
-                seenIds.add(channel.id)
-            }
-        }
-
-        return result.sortedBy { it.type.ordinal }
     }
 }

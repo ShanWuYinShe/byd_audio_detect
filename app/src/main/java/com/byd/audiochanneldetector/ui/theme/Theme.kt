@@ -1,10 +1,14 @@
 package com.byd.audiochanneldetector.ui.theme
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
     primary = BYDBlueLight,
@@ -35,12 +39,17 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun BYDAudioChannelDetectorTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val context = LocalContext.current
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
 
-    // Edge-to-Edge 模式：状态栏背景与字体深浅由 Activity.enableEdgeToEdge() 统一管理，
-    // 此处不再手工设置 statusBarColor / isAppearanceLightStatusBars（两者均已 deprecated）。
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,

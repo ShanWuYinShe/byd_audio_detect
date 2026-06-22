@@ -11,14 +11,15 @@
 
 | 组件 | 技术选择 |
 |------|----------|
-| 开发语言 | Kotlin 1.9.x |
-| UI 框架 | Jetpack Compose (BOM 2024.02.00) |
+| 开发语言 | Kotlin 2.2.10 |
+| UI 框架 | Jetpack Compose (BOM 2026.05.01) + Material 3 |
 | 架构 | MVVM + Clean Architecture |
 | 状态管理 | StateFlow + Compose State |
 | 依赖注入 | Hilt |
 | 并发 | Kotlin Coroutines |
 | 最低 SDK | Android API 26 (Android 8.0) |
-| 目标 SDK | Android API 34 (Android 14) |
+| 目标 SDK | Android API 37 |
+| 编译 SDK | Android API 37 |
 
 ## 3. 功能列表
 
@@ -84,12 +85,13 @@ enum class ChannelConfig {
 ### 5.1 音频通道检测路径
 
 ```
-1. /proc/asound/cards        - 读取声卡列表
-2. /proc/asound/pcm          - 读取 PCM 设备信息
-3. /dev/snd/                 - 设备节点目录
-4. AudioManager.getDevices()  - Android 标准 API
-5. AudioMixer.getActiveTracks() - 当前活动的音频轨
+1. /proc/asound/cards         - 读取声卡列表
+2. /proc/asound/pcm           - 读取 PCM 设备信息
+3. /dev/snd/                  - 设备节点目录
+4. AudioManager.getDevices()  - Android 标准 API（主源）
 ```
+
+> 活跃状态判定基于 `AudioManager.getActivePlaybackConfigurations()`（API 31+），不依赖非公开的 `AudioMixer.getActiveTracks()`。
 
 ### 5.2 通道类型识别策略
 

@@ -21,8 +21,8 @@ import com.byd.audiochanneldetector.ui.theme.*
 @Composable
 fun AudioChannelCard(
     channel: AudioChannel,
-    onClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
 ) {
     val typeColor = when (channel.type) {
         AudioChannelType.MEDIA -> MediaColor
@@ -99,14 +99,17 @@ fun AudioChannelCard(
                 )
             }
 
-            // 状态指示
+            // 状态指示：活跃=主色 / 有效空闲=绿 / 无效=错误色
+            val indicatorColor = when {
+                channel.isActive -> MaterialTheme.colorScheme.primary
+                channel.isValid -> Color(0xFF4CAF50)
+                else -> MaterialTheme.colorScheme.error
+            }
             Box(
                 modifier = Modifier
                     .size(12.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(
-                        if (channel.isValid) Color(0xFF4CAF50) else Color(0xFFF44336)
-                    )
+                    .background(indicatorColor)
             )
         }
     }
