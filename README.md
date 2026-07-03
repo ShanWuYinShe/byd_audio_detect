@@ -52,4 +52,4 @@ app/src/main/java/com/byd/audiochanneldetector/
 ## 说明
 
 - 应用不申请任何运行时权限。`/proc/asound`、`/dev/snd` 在非 root 设备上可能不可读，此时结果以 Android API 数据源为准。
-- 详细设计见 `SPEC.md`，开发约束见 `CLAUDE.md`。
+- 详细设计见 `SPEC.md`，开发约束见 `AGENTS.md`。

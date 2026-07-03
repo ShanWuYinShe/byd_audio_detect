@@ -1,10 +1,13 @@
-# CLAUDE.md
+# byd_audio_channel_detect
 
 Android 原生应用，检测比亚迪车机音频通道（识别有效通道、区分媒体/导航、声道组合）。
+
+> 通用约束（Git 规范、Commit 格式、验证流程、工具链偏好、JDK 配置、Docker 等）以全局 `~/.claude/AGENTS.md` 为准，本文件只做项目特有补充，不得放宽或违背全局约束。
 
 ## 构建 & 测试
 
 ```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ./gradlew assembleDebug                    # 编译调试 APK
 ./gradlew test                             # 运行单元测试（ALSAScanner 纯函数）
 ./gradlew lint                             # Lint（Android 默认规则）
@@ -28,5 +31,4 @@ Android 原生应用，检测比亚迪车机音频通道（识别有效通道、
 - **展示文案统一**：类型/声道/来源文案集中在 `ui/DisplayLabels`，详情页与分享报告共用，避免不一致。
 - **权限**：无任何运行时权限（不申明存储/录音/网络权限）；音频信息经 AudioManager 公开 API 与 `/proc`、`/dev/snd` 节点读取。`/proc`、`/dev/snd` 在非 root 设备上可能不可读，结果以 Android API 为主源。
 - **Git 忽略**：`.gitignore` 至少忽略 `.gradle/`、`.idea/`、`build/`、`local.properties`、`.claude/worktrees/`；本仓库已据此创建 `.gitignore`。
-- **构建 JDK**：本机 shell 无独立 JDK，Gradle 用 Android Studio 自带 JBR（`/Applications/Android Studio.app/Contents/jbr/Contents/Home`，JDK 21，符合 `gradle-daemon-jvm.properties`）。
 - **设计参考**：`docs/` 目录和 `SPEC.md` 含详细设计文档，修改前先查阅。
