@@ -21,5 +21,5 @@ local.properties
 # ----- AI Agent 工作目录 -----
 .workwork/
 
-# ----- Claude Code Worktree 元数据 -----
-.claude/worktrees/
+# ----- AI Worktree -----
+.worktrees/
