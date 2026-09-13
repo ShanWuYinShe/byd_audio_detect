@@ -107,7 +107,9 @@ enum class ChannelConfig {
 
 **① 实测判定（`AudioPlaybackConfiguration.getAudioAttributes()`，API 26+ 公开 API）**
 
-正在播放的音频用途（usage）与其落点设备即实测证据，结果跨刷新累积，标注"实测"：
+正在播放的音频用途（usage）与其落点设备即实测证据，结果跨刷新累积，标注"实测"。
+
+设备关联途径（"用途落在哪个端口"）：API 33+ 经 `AudioManager.getAudioDevicesForAttributes()` 路由查询（公开、免权限，返回设备与 `getDevices()` 枚举同源，按 type+address 对应）；API 31-32 依赖 `AudioPlaybackConfiguration.audioDeviceInfo`，但该信息系统侧从未填充（API 36 起文档标注 deprecated "never populated"），普通 App 恒为 null，此区间实测映射通常无法建立，类型保持推断结果。
 
 | AudioAttributes 用途 | 类型判定 |
 |----------------------|----------|

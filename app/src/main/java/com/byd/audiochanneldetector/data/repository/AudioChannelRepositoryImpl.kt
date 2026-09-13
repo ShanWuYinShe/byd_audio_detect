@@ -1,9 +1,12 @@
 package com.byd.audiochanneldetector.data.repository
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.AudioPlaybackConfiguration
 import android.os.Build
+import androidx.annotation.RequiresApi
 import com.byd.audiochanneldetector.data.ChannelTypeRules
 import com.byd.audiochanneldetector.data.scanner.ALSAScanner
 import com.byd.audiochanneldetector.domain.model.AudioChannel
@@ -161,35 +164,79 @@ class AudioChannelRepositoryImpl @Inject constructor(
      * API 等级约束：
      * - getActivePlaybackConfigurations() 自 API 26 起可用；
      * - AudioPlaybackConfiguration.getAudioAttributes() 自 API 26 起可用（公开 API）；
-     * - AudioPlaybackConfiguration.audioDeviceInfo 自 API 31 起可用（公开 API；API 36+ 被标
-     *   deprecated 但仍存在；公开替代 audioDevices() 当前为 @SystemApi，普通 App 不可用）；
+     * - API 33+：AudioManager.getAudioDevicesForAttributes() 公开查询指定用途的路由设备，
+     *   返回值与 getDevices() 枚举同源（type+address 对应），是建立"哪台设备在播放什么
+     *   用途"映射的可靠途径；
+     * - API 31-32：AudioPlaybackConfiguration.audioDeviceInfo 虽为公开 API，但系统侧从未
+     *   填充该信息（API 36 起文档标注 deprecated "never populated"），普通 App 恒为 null，
+     *   映射通常建立不起来，isActive 诚实回落 false、类型保持推断结果（不崩溃）；
      * - AudioDeviceInfo.address 自 API 28 起可用。
-     * 故仅 API 31+ 才能建立"哪台设备在播放什么用途"的映射；低于 31 的版本返回空快照，
-     * isActive 诚实回落 false、类型保持推断结果（不崩溃）。
      */
     private fun collectPlaybackSnapshot(): PlaybackSnapshot {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            return PlaybackSnapshot(emptySet(), emptyMap())
-        }
         val configs = runCatching { audioManager.activePlaybackConfigurations }
             .getOrDefault(emptyList())
         val keys = mutableSetOf<String>()
         val usagesByDeviceKey = mutableMapOf<String, MutableSet<Int>>()
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ->
+                addUsagesByRouting(configs, keys, usagesByDeviceKey)
+
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+                addUsagesByPlaybackDevice(configs, keys, usagesByDeviceKey)
+        }
+        return PlaybackSnapshot(keys, usagesByDeviceKey)
+    }
+
+    /** API 33+：对每个活跃用途查询其路由设备（与枚举设备同源），建立设备 key → 用途映射。 */
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun addUsagesByRouting(
+        configs: List<AudioPlaybackConfiguration>,
+        keys: MutableSet<String>,
+        usagesByDeviceKey: MutableMap<String, MutableSet<Int>>
+    ) {
+        val activeUsages = configs.mapNotNull { config ->
+            runCatching { config.audioAttributes.usage }.getOrNull()
+        }.toSet()
+        activeUsages.forEach { usage ->
+            val attributes = AudioAttributes.Builder().setUsage(usage).build()
+            val routedDevices = runCatching { audioManager.getAudioDevicesForAttributes(attributes) }
+                .getOrDefault(emptyList())
+            routedDevices.forEach { device ->
+                val deviceKeys = deviceKeysOf(device)
+                keys += deviceKeys
+                deviceKeys.forEach { key ->
+                    usagesByDeviceKey.getOrPut(key) { mutableSetOf() }.add(usage)
+                }
+            }
+        }
+    }
+
+    /** API 31-32：依赖 audioDeviceInfo 关联播放设备（系统多数未填充，尽力而为）。 */
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun addUsagesByPlaybackDevice(
+        configs: List<AudioPlaybackConfiguration>,
+        keys: MutableSet<String>,
+        usagesByDeviceKey: MutableMap<String, MutableSet<Int>>
+    ) {
         configs.forEach { config ->
             val usage = runCatching { config.audioAttributes.usage }.getOrNull() ?: return@forEach
-            @Suppress("DEPRECATION") // audioDeviceInfo 公开 API 持续可用；公开替代 audioDevices 当前为 @SystemApi
+            @Suppress("DEPRECATION") // audioDeviceInfo 公开 API 持续可用；API 33+ 已由路由查询替代
             val device = config.audioDeviceInfo ?: return@forEach
-            val deviceKeys = mutableSetOf("id:${device.id}")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                device.address.takeIf { it.isNotBlank() }?.let { deviceKeys += "addr:$it" }
-            }
-            device.productName?.toString()?.takeIf { it.isNotBlank() }?.let { deviceKeys += "name:$it" }
+            val deviceKeys = deviceKeysOf(device)
             keys += deviceKeys
             deviceKeys.forEach { key ->
                 usagesByDeviceKey.getOrPut(key) { mutableSetOf() }.add(usage)
             }
         }
-        return PlaybackSnapshot(keys, usagesByDeviceKey)
+    }
+
+    private fun deviceKeysOf(device: AudioDeviceInfo): Set<String> {
+        val deviceKeys = mutableSetOf("id:${device.id}")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            device.address.takeIf { it.isNotBlank() }?.let { deviceKeys += "addr:$it" }
+        }
+        device.productName?.toString()?.takeIf { it.isNotBlank() }?.let { deviceKeys += "name:$it" }
+        return deviceKeys
     }
 
     private data class PlaybackSnapshot(

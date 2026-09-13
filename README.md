@@ -5,7 +5,7 @@ Android 原生应用，用于检测比亚迪车机（及通用 Android 设备）
 ## 功能
 
 - **多源扫描**：Android 公开 API（`AudioManager.getDevices()`，仅输出设备）为主源，`/proc/asound`、`/dev/snd` ALSA 节点为辅助源；跨源去重（同名设备按地址区分），标注每个通道的数据来源与可靠性。
-- **类型实测判定**：基于 `AudioPlaybackConfiguration.getAudioAttributes()`（API 26+，公开 API）读取正在播放内容的用途（usage）——导航播报（`USAGE_ASSISTANCE_NAVIGATION_GUIDANCE`）落在哪个端口、媒体（`USAGE_MEDIA`）落在哪个端口，即实测判定对应通道类型，无需 root；判定结果跨刷新累积，标注"实测"徽标。
+- **类型实测判定**：基于 `AudioPlaybackConfiguration.getAudioAttributes()`（API 26+，公开 API）读取正在播放内容的用途（usage）——导航播报（`USAGE_ASSISTANCE_NAVIGATION_GUIDANCE`）落在哪个端口、媒体（`USAGE_MEDIA`）落在哪个端口，即实测判定对应通道类型，无需 root；设备关联经 `getAudioDevicesForAttributes()` 路由查询（API 33+；31-32 受系统限制尽力而为）；判定结果跨刷新累积，标注"实测"徽标。
 - **类型推断兜底**：无实测数据时按 名称/地址关键词 → `AudioDeviceInfo.type` 推断（标注"推断"）；车机 BUS 多路输出端口的地址 tag（如 `nav_bus`）参与关键词匹配并原样展示。
 - **声道检测**：Android 源按 `channelMasks` 的 `Integer.bitCount` 取最大值映射；ALSA 源尽力读取 `hw_params`（仅流打开时可读）并回退设备名 `Nch` 短格式。
 - **活跃判定与事件驱动刷新**：基于 `AudioManager.getActivePlaybackConfigurations()`（API 31+），低于 31 诚实回落为"未检测到"；播放开始/停止经 `registerAudioPlaybackCallback` 即时触发扫描（带防抖），避免轮询错过短促导航播报。
