@@ -16,6 +16,7 @@ import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
 import com.byd.audiochanneldetector.domain.model.ChannelSource
+import com.byd.audiochanneldetector.domain.model.ChannelTypeEvidence
 import com.byd.audiochanneldetector.ui.theme.*
 
 @Composable
@@ -83,6 +84,10 @@ fun AudioChannelCard(
                     ChannelConfigChip(config = channel.channelConfig)
                     Spacer(modifier = Modifier.width(8.dp))
                     SourceChip(source = channel.source)
+                    if (channel.typeEvidence == ChannelTypeEvidence.MEASURED) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        EvidenceChip()
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -91,6 +96,7 @@ fun AudioChannelCard(
                 Text(
                     text = buildString {
                         append("ID: ${channel.id}")
+                        channel.address?.let { append(" | 地址: $it") }
                         channel.devicePath?.let { append(" | 路径: $it") }
                         channel.sampleRate?.let { append(" | 采样率: ${it}Hz") }
                     },
@@ -181,6 +187,22 @@ fun SourceChip(source: ChannelSource) {
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.secondary
+        )
+    }
+}
+
+/** 类型实测判定标记：该通道类型来自播放用途实测，可信度高于关键词/设备类型推断。 */
+@Composable
+fun EvidenceChip() {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+    ) {
+        Text(
+            text = "实测",
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.tertiary
         )
     }
 }

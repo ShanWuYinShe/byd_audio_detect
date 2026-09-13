@@ -1,14 +1,15 @@
 # BYD Audio Channel Detector / 比亚迪音频通道检测
 
-Android 原生应用，用于检测比亚迪车机（及通用 Android 设备）上的音频通道：枚举有效通道、区分媒体/导航/语音/系统等类型、识别声道组合（单声道 / 立体声 / 5.1 / 7.1），并标注当前是否正在播放。
+Android 原生应用，用于检测比亚迪车机（及通用 Android 设备）上的音频输出通道：枚举有效通道、区分媒体/导航/语音/系统等类型、识别声道组合（单声道 / 立体声 / 5.1 / 7.1），并标注当前是否正在播放——为第三方盒子提供可靠的导航/媒体输出通道依据。
 
 ## 功能
 
-- **多源扫描**：Android 公开 API（`AudioManager.getDevices()`）为主源，`/proc/asound`、`/dev/snd` ALSA 节点为辅助源；跨源去重，标注每个通道的数据来源与可靠性。
-- **类型识别**：关键词匹配 + Android 设备类型推断（媒体/导航/语音通话/系统/警报）。
-- **声道检测**：Android 源按 `channelMasks` 的 `Integer.bitCount` 取最大值映射；ALSA 源解析 `N channels` / `Nch` 格式。
-- **活跃判定**：基于 `AudioManager.getActivePlaybackConfigurations()`（API 31+），低于 31 诚实回落为"未检测到"。
-- **UI**：Jetpack Compose + Material 3；列表 + 类型过滤；点击卡片弹出详情；顶栏分享纯文本报告（`Intent.ACTION_SEND`，无需权限）。
+- **多源扫描**：Android 公开 API（`AudioManager.getDevices()`，仅输出设备）为主源，`/proc/asound`、`/dev/snd` ALSA 节点为辅助源；跨源去重（同名设备按地址区分），标注每个通道的数据来源与可靠性。
+- **类型实测判定**：基于 `AudioPlaybackConfiguration.getAudioAttributes()`（API 26+，公开 API）读取正在播放内容的用途（usage）——导航播报（`USAGE_ASSISTANCE_NAVIGATION_GUIDANCE`）落在哪个端口、媒体（`USAGE_MEDIA`）落在哪个端口，即实测判定对应通道类型，无需 root；判定结果跨刷新累积，标注"实测"徽标。
+- **类型推断兜底**：无实测数据时按 名称/地址关键词 → `AudioDeviceInfo.type` 推断（标注"推断"）；车机 BUS 多路输出端口的地址 tag（如 `nav_bus`）参与关键词匹配并原样展示。
+- **声道检测**：Android 源按 `channelMasks` 的 `Integer.bitCount` 取最大值映射；ALSA 源尽力读取 `hw_params`（仅流打开时可读）并回退设备名 `Nch` 短格式。
+- **活跃判定与事件驱动刷新**：基于 `AudioManager.getActivePlaybackConfigurations()`（API 31+），低于 31 诚实回落为"未检测到"；播放开始/停止经 `registerAudioPlaybackCallback` 即时触发扫描（带防抖），避免轮询错过短促导航播报。
+- **UI**：Jetpack Compose + Material 3；列表 + 类型过滤；点击卡片弹出详情（含地址与判定依据）；顶栏分享纯文本报告（`Intent.ACTION_SEND`，无需权限）。
 
 ## 构建与测试
 
@@ -36,6 +37,7 @@ app/src/main/java/com/byd/audiochanneldetector/
 ├── AudioChannelDetectorApp.kt        # @HiltAndroidApp 入口
 ├── MainActivity.kt
 ├── data/                             # 数据层
+│   ├── ChannelTypeRules.kt           # 类型判定规则（关键词优先级 + usage 映射，纯函数）
 │   ├── repository/                   # Repository 接口与实现
 │   └── scanner/                      # ALSA 节点扫描器
 ├── di/                               # Hilt 模块

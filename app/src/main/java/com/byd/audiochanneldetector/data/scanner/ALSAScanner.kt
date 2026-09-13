@@ -1,10 +1,12 @@
 package com.byd.audiochanneldetector.data.scanner
 
 import android.util.Log
+import com.byd.audiochanneldetector.data.ChannelTypeRules
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
 import com.byd.audiochanneldetector.domain.model.ChannelSource
+import com.byd.audiochanneldetector.domain.model.ChannelTypeEvidence
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -54,7 +56,9 @@ class ALSAScanner @Inject constructor() {
     }
 
     private fun parseCards(content: String, channels: MutableList<AudioChannel>) {
-        val cardRegex = """(\d+)\s+\[(\S+)\s+]\s+:\s+(.+)""".toRegex()
+        // 真实内核格式（sound/core/init.c）：" %2i [%-16s]: %s - %s"，
+        // id 左对齐占 16 列，长度不足补空格、恰好占满时 `]` 紧跟其后，故 id 段用 [^\]]+ 并 trim
+        val cardRegex = """(\d+)\s+\[([^\]]+)\]\s*:\s+(.+)""".toRegex()
         cardRegex.findAll(content).forEach { match ->
             val (index, id, name) = match.destructured
             // 检查声卡目录是否存在且可读
@@ -64,67 +68,119 @@ class ALSAScanner @Inject constructor() {
                 AudioChannel(
                     id = "card-$index",
                     name = name.ifEmpty { "Card $index" },
-                    type = inferChannelType(name),
+                    type = inferChannelType("$name $id"),
                     channelConfig = ChannelConfig.UNKNOWN,
                     isActive = false, // 占位：由 Repository 基于 getActivePlaybackConfigurations 覆写
                     isValid = isValid,
                     devicePath = "/dev/snd/pcmC$index",
                     cardName = name,
+                    address = null,
                     sampleRate = null,
                     bitDepth = null,
-                    source = ChannelSource.ALSA
+                    source = ChannelSource.ALSA,
+                    typeEvidence = ChannelTypeEvidence.INFERRED
                 )
             )
         }
     }
 
     private fun parsePCM(content: String, channels: MutableList<AudioChannel>) {
-        val pcmRegex = """(\d+)-(\d+)\s+\[(\S+)\]:\s+(.+)""".toRegex()
+        // 真实内核格式（sound/core/pcm.c，snd_pcm_proc_read）：
+        // "%02i-%02i: %s : %s" 后按需追加 " : playback %i" / " : capture %i"。
+        // 注意：该文件本身不含采样率/声道数/位深，这些信息只在
+        // /proc/asound/cardX/pcmY{p,c}/sub0/hw_params 中且仅当流被打开时可读。
+        val pcmRegex = """(\d{1,2})-(\d{1,2}):\s*(.+)""".toRegex()
         pcmRegex.findAll(content).forEach { match ->
-            val (card, device, name, details) = match.destructured
-            val channelConfig = resolveChannelConfig(details, name)
-            // 设备路径用于验证有效性
+            val (card, device, rest) = match.destructured
+            val tokens = rest.split(" : ").map { it.trim() }
+            val pcmId = tokens.firstOrNull()?.takeIf { it.isNotEmpty() } ?: return@forEach
+            val name = tokens.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: pcmId
+            val directions = tokens.drop(2)
+            val hasPlayback = directions.any { it.startsWith("playback") }
+
+            // hw_params 仅在流被打开时含有效数据，属尽力而为的实时快照
+            val hw = readHwParams(
+                card.toInt(),
+                device.toInt(),
+                when {
+                    hasPlayback -> "p"
+                    directions.any { it.startsWith("capture") } -> "c"
+                    else -> null
+                }
+            )
             val devicePath = "/dev/snd/pcmC${card}D${device}"
             val isValid = checkDeviceStatus(card.toInt(), device.toInt())
             channels.add(
                 AudioChannel(
                     id = "pcm-$card-$device",
                     name = name,
-                    type = inferChannelType(name),
-                    channelConfig = channelConfig,
+                    type = inferChannelType("$name $pcmId"),
+                    channelConfig = hw?.channelCount?.let { channelCountToConfig(it) }
+                        ?: resolveChannelConfig("$pcmId $name"),
                     isActive = false, // 占位：由 Repository 基于 getActivePlaybackConfigurations 覆写
                     isValid = isValid,
                     devicePath = devicePath,
-                    cardName = null,
-                    sampleRate = extractSampleRate(details),
-                    bitDepth = extractBitDepth(details),
-                    source = ChannelSource.ALSA
+                    cardName = "card$card",
+                    address = null,
+                    sampleRate = hw?.sampleRate,
+                    bitDepth = hw?.bitDepth,
+                    source = ChannelSource.ALSA,
+                    typeEvidence = ChannelTypeEvidence.INFERRED
                 )
             )
         }
     }
 
     /**
-     * SPEC §5.3：先识别 /proc/asound/pcm details 中的 "N channels" 长格式（精度更高），
-     * 未命中再回退到设备名/详情中的 "Nch" 短格式（如 "2ch"、"6ch"）。
+     * 声道数 → 声道配置；无法识别的数量返回 null（保留 UNKNOWN）。
      */
-    internal fun resolveChannelConfig(details: String, name: String): ChannelConfig {
-        // 长格式优先
-        when {
-            details.contains("6 channels") -> return ChannelConfig.SURROUND_5_1
-            details.contains("8 channels") -> return ChannelConfig.SURROUND_7_1
-            details.contains("2 channels") -> return ChannelConfig.STEREO
-            details.contains("1 channel") -> return ChannelConfig.MONO
-        }
-        // 短格式回退（在 details + name 联合文本上匹配第一个 Nch）
-        val shortMatch = SHORT_CH_REGEX.find("$details $name")
-        val count = shortMatch?.groupValues?.get(1)?.toIntOrNull()
-        return when (count) {
-            1 -> ChannelConfig.MONO
-            2 -> ChannelConfig.STEREO
-            6 -> ChannelConfig.SURROUND_5_1
-            8 -> ChannelConfig.SURROUND_7_1
-            else -> ChannelConfig.UNKNOWN
+    internal fun channelCountToConfig(count: Int): ChannelConfig? = when (count) {
+        1 -> ChannelConfig.MONO
+        2 -> ChannelConfig.STEREO
+        6 -> ChannelConfig.SURROUND_5_1
+        8 -> ChannelConfig.SURROUND_7_1
+        else -> null
+    }
+
+    /**
+     * 设备名/ID 中尽力识别 "Nch" 短格式（如 "2ch"、"6ch"）。
+     * /proc/asound/pcm 本身不含声道信息，此处仅对把声道数编进名字的驱动兜底。
+     */
+    internal fun resolveChannelConfig(text: String): ChannelConfig {
+        val count = SHORT_CH_REGEX.find(text)?.groupValues?.get(1)?.toIntOrNull()
+        return channelCountToConfig(count ?: 0) ?: ChannelConfig.UNKNOWN
+    }
+
+    /**
+     * 解析 hw_params 文本（内核 snd_pcm_substream_proc_hw_params_read 输出）：
+     * - 流未打开时内容为 "closed" → 返回 null；
+     * - "rate: 48000 (48000/1)" → 48000；
+     * - "channels: 2" → 2；
+     * - "format: S16_LE" → 16（取格式名中的第一段数字，S24_3LE→24、U8→8、F32_LE→32）。
+     */
+    internal fun parseHwParams(content: String): HwParamsSnapshot? {
+        if (content.contains("closed")) return null
+        val rate = HW_RATE_REGEX.find(content)?.groupValues?.get(1)?.toIntOrNull()
+        val channels = HW_CHANNELS_REGEX.find(content)?.groupValues?.get(1)?.toIntOrNull()
+        val format = HW_FORMAT_REGEX.find(content)?.groupValues?.get(1)
+        val bitDepth = format?.let { DIGIT_REGEX.find(it)?.groupValues?.get(1)?.toIntOrNull() }
+        if (rate == null && channels == null && bitDepth == null) return null
+        return HwParamsSnapshot(sampleRate = rate, channelCount = channels, bitDepth = bitDepth)
+    }
+
+    internal data class HwParamsSnapshot(
+        val sampleRate: Int?,
+        val channelCount: Int?,
+        val bitDepth: Int?
+    )
+
+    private fun readHwParams(card: Int, device: Int, stream: String?): HwParamsSnapshot? {
+        if (stream == null) return null
+        return try {
+            val hwFile = File("/proc/asound/card$card/pcm$device$stream/sub0/hw_params")
+            if (hwFile.exists()) parseHwParams(hwFile.readText()) else null
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -161,7 +217,6 @@ class ALSAScanner @Inject constructor() {
                     val parts = file.name.removePrefix("pcmC").split("D")
                     if (parts.size == 2) {
                         val card = parts[0]
-                        val device = parts[1].takeWhile { it.isDigit() }
                         // 只添加有效且可读的设备
                         val isReadable = file.canRead()
                         if (isReadable && channels.none { it.devicePath == file.absolutePath }) {
@@ -175,15 +230,14 @@ class ALSAScanner @Inject constructor() {
                                     isValid = isReadable,
                                     devicePath = file.absolutePath,
                                     cardName = "card$card",
+                                    address = null,
                                     sampleRate = null,
                                     bitDepth = null,
-                                    source = ChannelSource.ALSA
+                                    source = ChannelSource.ALSA,
+                                    typeEvidence = ChannelTypeEvidence.INFERRED
                                 )
                             )
                         }
-                        // device 编号目前未参与字段构造，仅做命名约定占位
-                        @Suppress("UNUSED_VARIABLE")
-                        val unused = device
                     }
                 }
                 file.name.startsWith("controlC") -> {
@@ -194,52 +248,18 @@ class ALSAScanner @Inject constructor() {
     }
 
     /**
-     * SPEC §5.2 通道名称关键词识别表（严格对齐，不扩展）：
-     * - MEDIA       : media / music / audio / playback
-     * - NAVIGATION  : nav / navigation / gps
-     * - VOICE_CALL  : voice / call / phone / voip
-     * - SYSTEM      : system / ui / notification
-     * - ALARM       : alarm / ringtone / alert
+     * 通道名称/ID 关键词识别，规则见 [ChannelTypeRules.inferTypeFromKeywords]
+     * （检查顺序：导航 → 语音 → 警报 → 系统 → 媒体，媒体词最泛化故最后）。
      */
-    internal fun inferChannelType(name: String): AudioChannelType {
-        val lowerName = name.lowercase()
-        return when {
-            lowerName.contains("media") || lowerName.contains("music") ||
-                lowerName.contains("audio") || lowerName.contains("playback") ->
-                AudioChannelType.MEDIA
-
-            lowerName.contains("nav") || lowerName.contains("navigation") ||
-                lowerName.contains("gps") ->
-                AudioChannelType.NAVIGATION
-
-            lowerName.contains("voice") || lowerName.contains("call") ||
-                lowerName.contains("phone") || lowerName.contains("voip") ->
-                AudioChannelType.VOICE_CALL
-
-            lowerName.contains("system") || lowerName.contains("ui") ||
-                lowerName.contains("notification") ->
-                AudioChannelType.SYSTEM
-
-            lowerName.contains("alarm") || lowerName.contains("ringtone") ||
-                lowerName.contains("alert") ->
-                AudioChannelType.ALARM
-
-            else -> AudioChannelType.UNKNOWN
-        }
-    }
-
-    internal fun extractSampleRate(details: String): Int? {
-        val rateRegex = """(\d+)\s*kHz""".toRegex()
-        return rateRegex.find(details)?.groupValues?.get(1)?.toIntOrNull()?.times(1000)
-    }
-
-    internal fun extractBitDepth(details: String): Int? {
-        val bitRegex = """(\d+)\s*bit""".toRegex()
-        return bitRegex.find(details)?.groupValues?.get(1)?.toIntOrNull()
-    }
+    internal fun inferChannelType(name: String): AudioChannelType =
+        ChannelTypeRules.inferTypeFromKeywords(name)
 
     private companion object {
         private const val TAG = "ALSAScanner"
         private val SHORT_CH_REGEX = Regex("""(\d+)\s*ch\b""", RegexOption.IGNORE_CASE)
+        private val HW_RATE_REGEX = Regex("""rate:\s*(\d+)""")
+        private val HW_CHANNELS_REGEX = Regex("""channels:\s*(\d+)""")
+        private val HW_FORMAT_REGEX = Regex("""format:\s*(\S+)""")
+        private val DIGIT_REGEX = Regex("""(\d+)""")
     }
 }

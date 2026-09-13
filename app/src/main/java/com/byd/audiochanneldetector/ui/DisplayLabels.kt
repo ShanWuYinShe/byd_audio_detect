@@ -3,6 +3,7 @@ package com.byd.audiochanneldetector.ui
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
 import com.byd.audiochanneldetector.domain.model.ChannelSource
+import com.byd.audiochanneldetector.domain.model.ChannelTypeEvidence
 
 object DisplayLabels {
     fun typeText(type: AudioChannelType): String = when (type) {
@@ -25,5 +26,10 @@ object DisplayLabels {
     fun sourceText(source: ChannelSource): String = when (source) {
         ChannelSource.ANDROID -> "Android API"
         ChannelSource.ALSA -> "ALSA 节点"
+    }
+
+    fun evidenceText(evidence: ChannelTypeEvidence): String = when (evidence) {
+        ChannelTypeEvidence.MEASURED -> "实测"
+        ChannelTypeEvidence.INFERRED -> "推断"
     }
 }

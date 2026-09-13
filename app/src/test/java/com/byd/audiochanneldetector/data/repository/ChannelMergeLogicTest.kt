@@ -4,8 +4,10 @@ import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
 import com.byd.audiochanneldetector.domain.model.ChannelSource
+import com.byd.audiochanneldetector.domain.model.ChannelTypeEvidence
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -18,12 +20,14 @@ class ChannelMergeLogicTest {
         source: ChannelSource = ChannelSource.ANDROID,
         isValid: Boolean = true,
         cardName: String? = null,
-        devicePath: String? = null
+        devicePath: String? = null,
+        address: String? = null
     ) = AudioChannel(
         id = id, name = name, type = type,
         channelConfig = ChannelConfig.UNKNOWN, isActive = false, isValid = isValid,
-        devicePath = devicePath, cardName = cardName,
-        sampleRate = null, bitDepth = null, source = source
+        devicePath = devicePath, cardName = cardName, address = address,
+        sampleRate = null, bitDepth = null, source = source,
+        typeEvidence = ChannelTypeEvidence.INFERRED
     )
 
     @Test
@@ -61,6 +65,16 @@ class ChannelMergeLogicTest {
     }
 
     @Test
+    fun mergeChannels_sameNameDifferentAddressBothKept() {
+        // 车机多个 BUS 端口 productName 相同，仅地址不同：必须视为不同通道
+        val media = channel(id = "android-1", name = "BYD Audio", address = "media_bus")
+        val nav = channel(id = "android-2", name = "BYD Audio", address = "nav_bus")
+        val merged = ChannelMergeLogic.mergeChannels(listOf(media), listOf(nav))
+        assertEquals(2, merged.size)
+        assertNotEquals(ChannelMergeLogic.dedupKey(media), ChannelMergeLogic.dedupKey(nav))
+    }
+
+    @Test
     fun mergeChannels_sortedByTypeOrdinal() {
         val nav = channel(id = "1", name = "Nav", type = AudioChannelType.NAVIGATION)
         val media = channel(id = "2", name = "Media", type = AudioChannelType.MEDIA)
@@ -85,6 +99,39 @@ class ChannelMergeLogicTest {
     }
 
     @Test
+    fun dedupKey_appendsAddress() {
+        assertEquals(
+            "byd@nav_bus",
+            ChannelMergeLogic.dedupKey(channel("1", "BYD", address = "nav_bus"))
+        )
+    }
+
+    // ---------------- deviceKeys ----------------
+
+    @Test
+    fun deviceKeys_androidIdAndName() {
+        val keys = ChannelMergeLogic.deviceKeys(channel("android-42", "A"))
+        assertTrue("id:42" in keys)
+        assertTrue("name:A" in keys)
+    }
+
+    @Test
+    fun deviceKeys_includesAddress() {
+        val keys = ChannelMergeLogic.deviceKeys(channel("android-1", "A", address = "nav_bus"))
+        assertTrue("addr:nav_bus" in keys)
+    }
+
+    @Test
+    fun deviceKeys_includesCardPathIndex() {
+        val keys = ChannelMergeLogic.deviceKeys(
+            channel("pcm-0", "X", devicePath = "/dev/snd/pcmC0D0p", source = ChannelSource.ALSA)
+        )
+        assertTrue("addr:card0" in keys)
+    }
+
+    // ---------------- resolveIsActive ----------------
+
+    @Test
     fun resolveIsActive_emptyKeysReturnsFalse() {
         assertFalse(ChannelMergeLogic.resolveIsActive(channel("android-1", "A"), emptySet()))
     }
@@ -99,6 +146,12 @@ class ChannelMergeLogicTest {
     fun resolveIsActive_nameMatch() {
         val ch = channel("pcm-0", "Speaker", source = ChannelSource.ALSA)
         assertTrue(ChannelMergeLogic.resolveIsActive(ch, setOf("name:Speaker")))
+    }
+
+    @Test
+    fun resolveIsActive_addressMatch() {
+        val ch = channel("android-1", "A", address = "nav_bus")
+        assertTrue(ChannelMergeLogic.resolveIsActive(ch, setOf("addr:nav_bus")))
     }
 
     @Test

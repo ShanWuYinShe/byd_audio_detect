@@ -25,8 +25,10 @@
 
 ### 3.1 核心功能
 
-- [x] **音频通道扫描**: 自动扫描并枚举车机上所有音频输入/输出通道
-- [x] **通道类型识别**: 根据通道名称和属性判断是媒体/导航/语音/系统通道
+- [x] **音频通道扫描**: 自动扫描并枚举车机上所有音频输出通道（输入设备与第三方盒子目标无关，不枚举）
+- [x] **通道类型实测判定**: 经 `AudioPlaybackConfiguration.getAudioAttributes()` 观察正在播放内容的用途（导航播报/媒体音乐等），实测判定对应端口类型，结果跨刷新累积并标注"实测"
+- [x] **通道类型推断**: 无实测数据时按 名称/地址关键词 → 设备类型推断，标注"推断"
+- [x] **设备地址采集**: 输出设备 `AudioDeviceInfo.address`（audio_policy 端口 tag），区分同名 BUS 端口
 - [x] **声道配置检测**: 识别单声道、双声道(立体声)、5.1环绕声
 - [x] **通道状态显示**: 显示通道是否有效、是否正在使用
 - [x] **设备路径显示**: 显示 ALSA 设备节点路径
@@ -52,14 +54,21 @@ data class AudioChannel(
     val isValid: Boolean,              // 是否有效
     val devicePath: String?,          // ALSA 设备路径
     val cardName: String?,             // 声卡名称
+    val address: String?,              // 设备地址（audio_policy 端口 tag，如 nav_bus）
     val sampleRate: Int?,             // 采样率
     val bitDepth: Int?,               // 位深
-    val source: ChannelSource         // 数据来源（ANDROID 公开 API / ALSA 节点）
+    val source: ChannelSource,         // 数据来源（ANDROID 公开 API / ALSA 节点）
+    val typeEvidence: ChannelTypeEvidence  // 类型判定依据（实测 usage / 推断）
 )
 
 enum class ChannelSource {
     ANDROID,   // 通过 AudioManager 获取（主源，无需 root）
     ALSA       // 通过 /proc/asound 获取（辅助源）
+}
+
+enum class ChannelTypeEvidence {
+    MEASURED,  // 实测：由播放用途（usage）观察得出
+    INFERRED   // 推断：由名称/地址关键词或设备类型得出
 }
 
 enum class AudioChannelType {
@@ -85,28 +94,51 @@ enum class ChannelConfig {
 ### 5.1 音频通道检测路径
 
 ```
-1. /proc/asound/cards         - 读取声卡列表
-2. /proc/asound/pcm           - 读取 PCM 设备信息
-3. /dev/snd/                  - 设备节点目录
-4. AudioManager.getDevices()  - Android 标准 API（主源）
+1. AudioManager.getDevices()  - Android 标准 API（主源，仅 GET_DEVICES_OUTPUTS）
+2. /proc/asound/cards         - 读取声卡列表（辅助）
+3. /proc/asound/pcm           - 读取 PCM 设备信息（辅助）
+4. /dev/snd/                  - 设备节点目录（辅助）
 ```
 
 > 活跃状态判定基于 `AudioManager.getActivePlaybackConfigurations()`（API 31+），不依赖非公开的 `AudioMixer.getActiveTracks()`。
+> 播放开始/停止经 `AudioManager.registerAudioPlaybackCallback`（API 26+）事件驱动即时刷新（ViewModel 防抖 400ms），另有每 30s 轮询兜底。
 
-### 5.2 通道类型识别策略
+### 5.2 通道类型识别策略（优先级由高到低）
 
-| 通道名称关键词 | 类型判定 |
-|----------------|----------|
-| media, music, audio, playback | MEDIA |
-| nav, navigation, gps | NAVIGATION |
-| voice, call, phone, voip | VOICE_CALL |
-| system, ui, notification | SYSTEM |
-| alarm, ringtone, alert | ALARM |
+**① 实测判定（`AudioPlaybackConfiguration.getAudioAttributes()`，API 26+ 公开 API）**
+
+正在播放的音频用途（usage）与其落点设备即实测证据，结果跨刷新累积，标注"实测"：
+
+| AudioAttributes 用途 | 类型判定 |
+|----------------------|----------|
+| USAGE_ASSISTANCE_NAVIGATION_GUIDANCE | NAVIGATION |
+| USAGE_MEDIA / USAGE_GAME | MEDIA |
+| USAGE_VOICE_COMMUNICATION(_SIGNALLING) | VOICE_CALL |
+| USAGE_ALARM | ALARM |
+| USAGE_NOTIFICATION* / ASSISTANCE_SONIFICATION / ASSISTANCE_ACCESSIBILITY | SYSTEM |
+| USAGE_ASSISTANT / USAGE_UNKNOWN | 不覆写（保持推断） |
+
+同一设备观察到多用途时按 导航 > 语音通话 > 警报 > 媒体 > 系统 取优（语义专属者胜出）。
+
+**② 名称/地址关键词推断**（实测缺失时；检查顺序如下，媒体词最泛化故最后）
+
+| 优先级 | 关键词（子串匹配） | 类型判定 |
+|--------|--------------------|----------|
+| 1 | nav, gps | NAVIGATION |
+| 2 | voice, call, phone, voip | VOICE_CALL |
+| 3 | alarm, ringtone, alert | ALARM |
+| 4 | system, ui, notification | SYSTEM |
+| 5 | media, music, audio, playback | MEDIA |
+
+匹配文本 = 设备名称 + 地址（BUS 端口 tag 如 `nav_bus`）或 ALSA 卡名/PCM 名。已知局限："ui" 子串会误命中含 guide/quick 的名称，车机命名场景概率低，保持简单策略。
+
+**③ 设备类型推断**：`AudioDeviceInfo.type` 映射（扬声器/HDMI/USB/蓝牙 A2DP/AUX 等输出 → MEDIA，SCO/TELEPHONY → VOICE_CALL）；`TYPE_BUS` 为车机多路输出主要形态，仅凭类型无法区分内容用途，不做臆断映射、诚实回落 UNKNOWN。
 
 ### 5.3 声道配置识别
 
-- **Android 源**：`AudioDeviceInfo.channelMasks` 中每个掩码的置位位数（`Integer.bitCount(mask)`）即声道数，取所有支持配置的最大值映射（MONO/STEREO/5.1/7.1）
-- **ALSA 源**：解析 `/proc/asound/pcm` 中的 `N channels` 长格式，回退到设备名的 `Nch` 短格式（如 2ch、6ch）
+- **Android 源**：`channelMasks` 中每个掩码的置位位数（`Integer.bitCount`）即声道数，取所有支持配置的最大值映射（MONO/STEREO/5.1/7.1）
+- **ALSA 源**：尽力读取 `/proc/asound/cardX/pcmY{p,c}/sub0/hw_params`（`channels:`/`rate:`/`format:` 行，仅流打开时有数据；位深取格式名中的数字段，如 `S16_LE`→16），回退设备名/ID 的 `Nch` 短格式（如 2ch、6ch）。
+  注意：`/proc/asound/pcm` 本身不含声道/采样率/位深（内核 `snd_pcm_proc_read` 输出格式为 `NN-NN: id : name[ : playback N][ : capture N]`）。
 
 ## 6. 项目结构
 

@@ -4,6 +4,7 @@ import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
 import com.byd.audiochanneldetector.domain.model.ChannelSource
+import com.byd.audiochanneldetector.domain.model.ChannelTypeEvidence
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -16,13 +17,16 @@ class ShareReportFormatterTest {
         source: ChannelSource = ChannelSource.ANDROID,
         devicePath: String? = null,
         cardName: String? = null,
+        address: String? = null,
         sampleRate: Int? = null,
-        bitDepth: Int? = null
+        bitDepth: Int? = null,
+        evidence: ChannelTypeEvidence = ChannelTypeEvidence.INFERRED
     ) = AudioChannel(
         id = "id-$name", name = name, type = type,
         channelConfig = ChannelConfig.STEREO, isActive = active, isValid = true,
-        devicePath = devicePath, cardName = cardName,
-        sampleRate = sampleRate, bitDepth = bitDepth, source = source
+        devicePath = devicePath, cardName = cardName, address = address,
+        sampleRate = sampleRate, bitDepth = bitDepth, source = source,
+        typeEvidence = evidence
     )
 
     @Test
@@ -42,6 +46,7 @@ class ShareReportFormatterTest {
         val text = ShareReportFormatter.format(channels)
         assertTrue(text.contains("总通道: 3"))
         assertTrue(text.contains("活跃: 1"))
+        assertTrue(text.contains("实测判定: 0"))
         assertTrue(text.contains("媒体: 2"))
         assertTrue(text.contains("导航: 1"))
     }
@@ -62,5 +67,21 @@ class ShareReportFormatterTest {
         assertTrue(text.contains("/dev/snd/pcmC0D0p"))
         assertTrue(text.contains("48000Hz"))
         assertTrue(text.contains("16bit"))
+    }
+
+    @Test
+    fun format_includesEvidenceAndAddress() {
+        val channels = listOf(
+            channel(
+                "Nav Port", type = AudioChannelType.NAVIGATION,
+                address = "nav_bus", evidence = ChannelTypeEvidence.MEASURED
+            ),
+            channel("Speaker", type = AudioChannelType.MEDIA)
+        )
+        val text = ShareReportFormatter.format(channels)
+        assertTrue(text.contains("类型: 导航（实测）"))
+        assertTrue(text.contains("地址: nav_bus"))
+        assertTrue(text.contains("类型: 媒体（推断）"))
+        assertTrue(text.contains("实测判定: 1"))
     }
 }

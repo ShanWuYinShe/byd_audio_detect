@@ -210,11 +210,15 @@ private fun ChannelDetailSheet(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            DetailRow(label = "通道类型", value = DisplayLabels.typeText(channel.type))
+            DetailRow(
+                label = "通道类型",
+                value = "${DisplayLabels.typeText(channel.type)}（${DisplayLabels.evidenceText(channel.typeEvidence)}）"
+            )
             DetailRow(label = "声道配置", value = DisplayLabels.configText(channel.channelConfig))
             DetailRow(label = "数据来源", value = DisplayLabels.sourceText(channel.source))
             DetailRow(label = "是否有效", value = if (channel.isValid) "是" else "否")
             DetailRow(label = "是否活跃", value = if (channel.isActive) "是（正在使用）" else "否")
+            channel.address?.let { DetailRow(label = "地址", value = it) }
             channel.devicePath?.let { DetailRow(label = "设备路径", value = it) }
             channel.cardName?.let { DetailRow(label = "声卡名称", value = it) }
             channel.sampleRate?.let { DetailRow(label = "采样率", value = "${it}Hz") }
