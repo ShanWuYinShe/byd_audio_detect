@@ -18,8 +18,5 @@ local.properties
 # ----- 操作系统 -----
 .DS_Store
 
-# ----- AI Agent 工作目录 -----
-.workwork/
-
 # ----- AI Worktree -----
 .worktrees/
