@@ -1,5 +1,6 @@
-# CI：lint + 单元测试 + Debug 构建
-# 不跑 assembleRelease：签名凭据（ANDROID_KEYSTORE 等）不入 CI，release 产物本地构建
+# CI：lint + 单元测试 + Debug/Release 构建
+# assembleRelease 让 R8/minify 与资源收缩路径进 CI；无签名凭据时产出 unsigned APK
+# 且构建不失败（见 app/build.gradle.kts signingConfigs 的环境变量约定）
 name: CI
 
 on:
@@ -19,12 +20,16 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # 校验 gradle-wrapper.jar 完整性（2026-09-22 查证 gradle/actions README，最新主版本为 v6）
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
       - name: 缓存 Gradle 依赖
         uses: actions/cache@v6
         with:
           path: ~/.gradle/caches
-          key: gradle-${{ hashFiles('**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+          key: gradle-${{ hashFiles('**/*.gradle.kts', '**/gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
-      - name: Lint、单元测试与 Debug 构建
-        run: ./gradlew --no-daemon lint test assembleDebug
+      - name: Lint、单元测试与 Debug/Release 构建
+        run: ./gradlew --no-daemon lint test assembleDebug assembleRelease
