@@ -27,4 +27,4 @@ jobs:
           restore-keys: gradle-
 
       - name: Lint、单元测试与 Debug 构建
-        run: ./gradlew lint test assembleDebug
+        run: ./gradlew --no-daemon lint test assembleDebug

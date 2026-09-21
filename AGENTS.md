@@ -15,11 +15,13 @@ Android 原生应用，检测比亚迪车机音频通道（识别有效通道、
 
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"  # 全局「本机环境」权威定义；以 ls 验证，变动时用 mdfind 定位
-./gradlew assembleDebug                    # 编译调试 APK
-./gradlew test                             # 运行单元测试（4 个测试类 48 例，debug 变体）
-./gradlew lint                             # Lint（Android 默认规则）
+./gradlew assembleDebug --no-daemon        # 编译调试 APK
+./gradlew test --no-daemon                 # 运行单元测试（4 个测试类 48 例，debug 变体）
+./gradlew lint --no-daemon                 # Lint（Android 默认规则）
 ./gradlew clean                            # 清理构建产物
 ```
+
+Gradle 命令加 `--no-daemon` 的原因见全局 `toolchain-setup` skill（防 Daemon 累积撑爆内存）。
 
 测试：`app/src/test/` 含 `ALSAScannerTest`（类型识别/声道配置/hw_params 解析）、`ChannelTypeRulesTest`（关键词优先级/usage→类型映射）、`ChannelMergeLogicTest`（跨源去重/设备 key/活跃判定）、`ShareReportFormatterTest`（分享报告格式化），共 48 例纯函数单测，`./gradlew test` 运行。插桩测试：`app/src/androidTest/` 含 `AudioChannelRepositoryImplInstrumentedTest`（真行为测试——`AudioDeviceInfo`/`AudioPlaybackConfiguration` 为 final 类无法 mock，故用 `AudioTrack` 播放指定用途静音音频驱动实测判定/累积/优先级路径），`./gradlew connectedDebugAndroidTest` 需连接设备或模拟器运行。
 
