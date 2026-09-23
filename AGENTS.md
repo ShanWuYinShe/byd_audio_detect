@@ -4,17 +4,11 @@ Android 原生应用，检测比亚迪车机音频通道（识别有效通道、
 
 通用约束（Git 规范、Commit 格式、验证流程、工具链偏好、JDK 配置等）以全局 `~/AGENTS.md` 为准，本文件只做项目特有补充，不得放宽或违背全局约束。
 
-## 按需加载的 skill（.agents/skills/）
-
-| skill | 何时加载 |
-|---|---|
-| byd-audio-detection | 修改检测逻辑、类型识别规则、声道/活跃判定、ALSA 解析时 |
-
 
 ## 构建 & 测试
 
 ```bash
-export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"  # 全局「本机环境」权威定义；以 ls 验证，变动时用 mdfind 定位
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ANDROID_HOME="/Users/liyou/Library/Android/sdk"
 ./gradlew assembleDebug --no-daemon        # 编译调试 APK
 ./gradlew test --no-daemon                 # 运行单元测试（4 个测试类 48 例，debug 变体）
 ./gradlew lint --no-daemon                 # Lint（Android 默认规则）
