@@ -20,3 +20,4 @@ local.properties
 
 # ----- AI Worktree -----
 .worktrees/
+.workwork/
