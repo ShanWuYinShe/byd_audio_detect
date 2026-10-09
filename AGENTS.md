@@ -8,7 +8,7 @@ Android 原生应用，检测比亚迪车机音频通道（识别有效通道、
 ## 构建 & 测试
 
 ```bash
-export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ANDROID_HOME="/Users/liyou/Library/Android/sdk"
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ANDROID_HOME="$HOME/Library/Android/sdk"
 ./gradlew assembleDebug --no-daemon        # 编译调试 APK
 ./gradlew test --no-daemon                 # 运行单元测试（4 个测试类 48 例，debug 变体）
 ./gradlew lint --no-daemon                 # Lint（Android 默认规则）
