@@ -13,7 +13,7 @@ Android 原生应用，用于检测比亚迪车机（及通用 Android 设备）
 
 ## 构建与测试
 
-> 本机 shell 无独立 JDK，使用 Android Studio 自带 JBR（JDK 21）。
+> 未单独安装 JDK 时，可直接使用 Android Studio 自带 JBR（JDK 21）。
 
 ```bash
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew assembleDebug   # 编译 Debug APK
@@ -24,7 +24,7 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 
 ### 测试
 
-`./gradlew test` 运行 `testDebugUnitTest`：4 个测试类共 48 例纯函数单测（AGP 9 下不存在 `testReleaseUnitTest` 任务，单测仅在 debug 变体执行）。release 签名凭据通过 `ANDROID_KEYSTORE` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` 环境变量提供，全部设置时 `assembleRelease` 产出签名 APK，否则产出 unsigned APK。
+`./gradlew test` 运行 `testDebugUnitTest`：5 个测试类共 51 例纯函数单测（AGP 9 下不存在 `testReleaseUnitTest` 任务，单测仅在 debug 变体执行）。release 签名凭据通过 `ANDROID_KEYSTORE` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` 环境变量提供，全部设置时 `assembleRelease` 产出签名 APK，否则产出 unsigned APK。
 
 ## 技术栈
 
