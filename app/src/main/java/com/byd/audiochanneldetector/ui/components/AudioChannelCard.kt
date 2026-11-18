@@ -10,7 +10,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
@@ -38,7 +41,7 @@ fun AudioChannelCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(onClickLabel = "查看通道详情", onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -74,7 +77,9 @@ fun AudioChannelCard(
                 Text(
                     text = channel.name,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -102,21 +107,30 @@ fun AudioChannelCard(
                         channel.sampleRate?.let { append(" | 采样率: ${it}Hz") }
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
-            // 状态指示：活跃=主色 / 有效空闲=绿 / 无效=错误色
+            // 状态指示：活跃=主色 / 有效空闲=绿 / 无效=错误色。
+            // 纯颜色指示对读屏不可见，contentDescription 随状态变化（移动端无障碍约定第 4 条）
             val indicatorColor = when {
                 channel.isActive -> MaterialTheme.colorScheme.primary
                 channel.isValid -> Color(0xFF4CAF50)
                 else -> MaterialTheme.colorScheme.error
+            }
+            val statusText = when {
+                channel.isActive -> "正在使用"
+                channel.isValid -> "空闲可用"
+                else -> "无效设备"
             }
             Box(
                 modifier = Modifier
                     .size(12.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(indicatorColor)
+                    .semantics { contentDescription = statusText }
             )
         }
     }
