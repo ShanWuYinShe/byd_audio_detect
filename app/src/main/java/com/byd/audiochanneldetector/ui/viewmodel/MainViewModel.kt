@@ -109,13 +109,11 @@ class MainViewModel @Inject constructor(
                     _uiState.update { state ->
                         state.copy(
                             channels = channels,
-                            filteredChannels = filterChannels(channels, state.selectedFilter),
+                            filteredChannels = MainUiLogic.filterChannels(channels, state.selectedFilter),
                             isLoading = false,
                             // 详情弹层跟随刷新更新到最新数据（活跃/实测状态会变）；
                             // 通道已从列表消失则置 null 关闭弹层，避免持续展示过期设备
-                            selectedChannel = state.selectedChannel?.let { selected ->
-                                channels.firstOrNull { it.id == selected.id }
-                            }
+                            selectedChannel = MainUiLogic.resolveSelectedChannel(state.selectedChannel, channels)
                         )
                     }
                 }
@@ -126,7 +124,7 @@ class MainViewModel @Inject constructor(
         _uiState.update { state ->
             state.copy(
                 selectedFilter = type,
-                filteredChannels = filterChannels(state.channels, type)
+                filteredChannels = MainUiLogic.filterChannels(state.channels, type)
             )
         }
     }
@@ -140,17 +138,6 @@ class MainViewModel @Inject constructor(
      * 生成可分享的纯文本检测报告，供系统分享面板（Intent.ACTION_SEND）使用，无需任何权限。
      */
     fun buildShareText(): String = ShareReportFormatter.format(_uiState.value.channels)
-
-    private fun filterChannels(
-        channels: List<AudioChannel>,
-        filter: AudioChannelType?
-    ): List<AudioChannel> {
-        return if (filter == null) {
-            channels
-        } else {
-            channels.filter { it.type == filter }
-        }
-    }
 
     private companion object {
         private const val AUTO_REFRESH_INTERVAL_MS = 30_000L
