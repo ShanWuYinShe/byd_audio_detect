@@ -33,7 +33,7 @@ Gradle 命令加 `--no-daemon` 的原因见全局 `toolchain-setup` skill（防 
   - `git diff --check`：改动文件无行尾空白、无冲突标记；
   - 文档类改动人工核对其中路径、命令、job 名与项目文件一致；
   - 需要编译、Lint 或单元测试证据时一律看 CI，不在本机执行。
-- CI 覆盖（`.github/workflows/ci.yml` 的 `build` job，`push` 全分支 + `pull_request` 触发）：
+- CI 覆盖（`.github/workflows/ci.yml` 的 `build` job，`push` 限 main + `pull_request` 触发，concurrency 同分支取消旧 run）：开发分支的检查经 PR 的 `pull_request` 触发；连续推送自动取消旧 run，只保留最新结论。
   wrapper-validation 校验 `gradle-wrapper.jar`；`./gradlew --no-daemon lint test assembleDebug assembleRelease`
   覆盖 Android Lint、debug 变体单元测试、Debug APK 构建、Release 构建（R8/minify + 资源收缩；
   无签名凭据时产出 unsigned APK 且不失败）。

@@ -5,7 +5,14 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+
+# 同一分支连续推送取消旧 run，只保留最新结论（PR 连续推送时避免排队浪费）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
