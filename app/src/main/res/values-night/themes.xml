@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色模式下启动窗口（setContent 之前）用暗色平台主题，避免深色用户启动闪白屏；
+         进入 Compose 后由 BYDAudioChannelDetectorTheme 按 isSystemInDarkTheme 接管 -->
+    <style name="Theme.BYDAudioChannelDetector" parent="android:Theme.Material.NoActionBar" />
+</resources>
