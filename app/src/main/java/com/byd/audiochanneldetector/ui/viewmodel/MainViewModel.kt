@@ -110,7 +110,12 @@ class MainViewModel @Inject constructor(
                         state.copy(
                             channels = channels,
                             filteredChannels = filterChannels(channels, state.selectedFilter),
-                            isLoading = false
+                            isLoading = false,
+                            // 详情弹层跟随刷新更新到最新数据（活跃/实测状态会变）；
+                            // 通道已从列表消失则置 null 关闭弹层，避免持续展示过期设备
+                            selectedChannel = state.selectedChannel?.let { selected ->
+                                channels.firstOrNull { it.id == selected.id }
+                            }
                         )
                     }
                 }
