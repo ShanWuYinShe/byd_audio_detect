@@ -268,18 +268,7 @@ fun FilterChips(
             FilterChip(
                 selected = selectedFilter == type,
                 onClick = { onFilterSelected(type) },
-                label = {
-                    Text(
-                        when (type) {
-                            AudioChannelType.MEDIA -> "媒体"
-                            AudioChannelType.NAVIGATION -> "导航"
-                            AudioChannelType.VOICE_CALL -> "语音"
-                            AudioChannelType.SYSTEM -> "系统"
-                            AudioChannelType.ALARM -> "警报"
-                            AudioChannelType.UNKNOWN -> "未知"
-                        }
-                    )
-                }
+                label = { Text(DisplayLabels.typeText(type)) }
             )
         }
     }

@@ -17,6 +17,7 @@ import com.byd.audiochanneldetector.domain.model.AudioChannelType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
 import com.byd.audiochanneldetector.domain.model.ChannelSource
 import com.byd.audiochanneldetector.domain.model.ChannelTypeEvidence
+import com.byd.audiochanneldetector.ui.DisplayLabels
 import com.byd.audiochanneldetector.ui.theme.*
 
 @Composable
@@ -137,14 +138,7 @@ fun ChannelTypeChip(type: AudioChannelType) {
         color = color.copy(alpha = 0.15f)
     ) {
         Text(
-            text = when (type) {
-                AudioChannelType.MEDIA -> "媒体"
-                AudioChannelType.NAVIGATION -> "导航"
-                AudioChannelType.VOICE_CALL -> "语音"
-                AudioChannelType.SYSTEM -> "系统"
-                AudioChannelType.ALARM -> "警报"
-                AudioChannelType.UNKNOWN -> "未知"
-            },
+            text = DisplayLabels.typeText(type),
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelMedium,
             color = color
@@ -159,13 +153,7 @@ fun ChannelConfigChip(config: ChannelConfig) {
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
     ) {
         Text(
-            text = when (config) {
-                ChannelConfig.MONO -> "单声道"
-                ChannelConfig.STEREO -> "立体声"
-                ChannelConfig.SURROUND_5_1 -> "5.1环绕"
-                ChannelConfig.SURROUND_7_1 -> "7.1环绕"
-                ChannelConfig.UNKNOWN -> "未知"
-            },
+            text = DisplayLabels.configText(config),
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary
@@ -180,10 +168,7 @@ fun SourceChip(source: ChannelSource) {
         color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
     ) {
         Text(
-            text = when (source) {
-                ChannelSource.ANDROID -> "Android"
-                ChannelSource.ALSA -> "ALSA"
-            },
+            text = DisplayLabels.sourceText(source),
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.secondary
