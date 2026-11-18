@@ -48,7 +48,7 @@ Gradle 命令加 `--no-daemon` 的原因见全局 `toolchain-setup` skill（防 
 - UI：Jetpack Compose + Material 3。
 - DI：Hilt（`@HiltAndroidApp`、`@AndroidEntryPoint`、`@Module`）。
 - 状态管理：ViewModel + StateFlow，ui 层通过 `collectAsStateWithLifecycle()` 收集。
-- UI 功能：列表 + 类型过滤（`FlowRow` 自适应换行）；点击卡片弹出 `ModalBottomSheet` 展示完整详情；顶栏分享按钮经 `Intent.ACTION_SEND` 导出纯文本报告（无新权限）；每 30s 自动刷新并支持手动刷新；Android 12+ 启用 Material You 动态取色。
+- UI 功能：列表 + 类型过滤（`FlowRow` 自适应换行）；点击卡片弹出 `ModalBottomSheet` 展示完整详情；顶栏分享按钮经 `Intent.ACTION_SEND` 导出纯文本报告（无新权限）；刷新机制：播放开始/停止经 `AudioPlaybackCallback` 即时触发（400ms 防抖）+ 每 30s 轮询兜底 + 手动刷新；Android 12+ 启用 Material You 动态取色。
 - 展示文案统一：类型/声道/来源文案集中在 `ui/DisplayLabels`，详情页与分享报告共用，避免不一致。
 - 权限：无任何运行时权限（不申明存储/录音/网络权限）；音频信息经 AudioManager 公开 API 与 `/proc`、`/dev/snd` 节点读取。`/proc`、`/dev/snd` 在非 root 设备上可能不可读，结果以 Android API 为主源。
 - Git 忽略：`.gitignore` 至少忽略 `.gradle/`、`.idea/`、`build/`、`local.properties`、`.agents/worktrees/`。
