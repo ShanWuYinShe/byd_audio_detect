@@ -111,7 +111,17 @@ class ALSAScanner @Inject constructor() {
             // /proc/asound/pcm 的行号是 %02i 补零格式，这里 toInt 规范化，
             // 使 devicePath 与 /dev/snd 真实节点（pcmC0D0p）及 scanDevSnd 的规范化路径一致
             val devicePath = "/dev/snd/pcmC${card.toInt()}D${device.toInt()}"
-            val isValid = checkDeviceStatus(card.toInt(), device.toInt())
+            // status/info 的 proc 子流目录带方向后缀（pcm0p/pcm0c），与 hw_params 同布局；
+            // 方向未知时默认 playback
+            val isValid = checkDeviceStatus(
+                card.toInt(),
+                device.toInt(),
+                when {
+                    hasPlayback -> "p"
+                    directions.any { it.startsWith("capture") } -> "c"
+                    else -> "p"
+                }
+            )
             channels.add(
                 AudioChannel(
                     id = "pcm-$card-$device",
@@ -187,20 +197,20 @@ class ALSAScanner @Inject constructor() {
     }
 
     /**
-     * 检查设备状态：通过读取 /proc/asound/cardX/pcmY/subZ/status 判断设备是否有效
-     * 如果 status 文件存在且包含 RUNNING/OPEN 等状态，说明设备可用
+     * 检查设备有效性：读取 /proc/asound/cardX/pcmY<direction>/ 子流的 proc 条目。
+     * 子流目录带方向后缀（pcm0p/pcm0c）——修复前读无后缀的 pcmY/sub0/status，
+     * 该路径在内核 proc 布局中不存在，status 检查从未命中、恒走 fallback。
+     *
+     * 语义：status/info 任一 proc 条目可访问即说明驱动已注册该子流，设备有效；
+     * RUNNING 与否是「正在播放」语义，由 Repository 基于 playback config 判定
+     * （isActive），不在此处混用——空闲设备仍是有效设备。
+     * proc 在非 root/受限 SELinux 下可能不可读，此时回落到声卡目录存在性兜底。
      */
-    private fun checkDeviceStatus(card: Int, device: Int): Boolean {
+    private fun checkDeviceStatus(card: Int, device: Int, direction: String): Boolean {
         try {
-            // 尝试读取设备状态文件
-            val statusFile = File("/proc/asound/card$card/pcm$device/sub0/status")
-            if (statusFile.exists()) {
-                val status = statusFile.readText()
-                // 检查设备是否处于活跃状态
-                return status.contains("RUNNING") || status.contains("OPEN")
-            }
-            // 如果没有 status 文件，检查 info 文件
-            val infoFile = File("/proc/asound/card$card/pcm$device/info")
+            val statusFile = File("/proc/asound/card$card/pcm$device$direction/sub0/status")
+            if (statusFile.exists()) return true
+            val infoFile = File("/proc/asound/card$card/pcm$device$direction/info")
             if (infoFile.exists()) {
                 return infoFile.readText().isNotBlank()
             }
