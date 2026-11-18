@@ -1,10 +1,14 @@
 package com.byd.audiochanneldetector.data.scanner
 
+import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
+import com.byd.audiochanneldetector.domain.model.ChannelSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.io.File
+import java.nio.file.Files
 
 /**
  * ALSAScanner 纯文本解析函数的单元测试。
@@ -126,5 +130,53 @@ class ALSAScannerTest {
         assertNull(scanner.parseHwParams("closed"))
         assertNull(scanner.parseHwParams(""))
         assertNull(scanner.parseHwParams("no relevant keys here"))
+    }
+
+    // ---------------- parsePCM / scanDevSnd 设备去重 ----------------
+
+    @Test
+    fun scanDevSnd_skipsDeviceAlreadyListedByPcm() {
+        // /proc/asound/pcm 先解析出 card0/device0（devicePath 为无方向后缀的规范化路径）
+        val channels = mutableListOf<AudioChannel>()
+        scanner.parsePCM("00-00: media : Media Bus : playback 1", channels)
+        assertEquals("/dev/snd/pcmC0D0", channels.single().devicePath)
+
+        // /dev/snd 下同一设备的节点带方向后缀，不应重复添加
+        // （修复前 scanDevSnd 用带后缀的文件绝对路径比较，与 parsePCM 路径永不相等，去重失效）
+        val dir = Files.createTempDirectory("alsa-snd-test").toFile()
+        try {
+            File(dir, "pcmC0D0p").createNewFile()
+            scanner.scanDevSnd(dir, channels)
+            assertEquals(1, channels.size)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun scanDevSnd_addsNormalizedPathAndFoldsDirectionNodes() {
+        val channels = mutableListOf<AudioChannel>()
+        val dir = Files.createTempDirectory("alsa-snd-test").toFile()
+        try {
+            // 同一设备的 p/c 两个子流节点只保留一条
+            File(dir, "pcmC1D2p").createNewFile()
+            File(dir, "pcmC1D2c").createNewFile()
+            // 不同设备正常添加；方向后缀非法的节点名跳过；控制节点跳过
+            File(dir, "pcmC3D0c").createNewFile()
+            File(dir, "pcmC3D0x").createNewFile()
+            File(dir, "controlC1").createNewFile()
+
+            scanner.scanDevSnd(dir, channels)
+
+            assertEquals(2, channels.size)
+            val pcm12 = channels.filter { it.name.startsWith("pcmC1D2") }
+            assertEquals(1, pcm12.size)
+            assertEquals("${dir.path}/pcmC1D2", pcm12.single().devicePath) // 规范化路径与 parsePCM 格式一致
+            assertEquals("card1", pcm12.single().cardName)
+            assertEquals(ChannelSource.ALSA, pcm12.single().source)
+            assertEquals("dev-pcmC3D0c", channels.single { it.name.startsWith("pcmC3D0") }.id)
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 }

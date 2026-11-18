@@ -84,7 +84,7 @@ class ALSAScanner @Inject constructor() {
         }
     }
 
-    private fun parsePCM(content: String, channels: MutableList<AudioChannel>) {
+    internal fun parsePCM(content: String, channels: MutableList<AudioChannel>) {
         // 真实内核格式（sound/core/pcm.c，snd_pcm_proc_read）：
         // "%02i-%02i: %s : %s" 后按需追加 " : playback %i" / " : capture %i"。
         // 注意：该文件本身不含采样率/声道数/位深，这些信息只在
@@ -108,7 +108,9 @@ class ALSAScanner @Inject constructor() {
                     else -> null
                 }
             )
-            val devicePath = "/dev/snd/pcmC${card}D${device}"
+            // /proc/asound/pcm 的行号是 %02i 补零格式，这里 toInt 规范化，
+            // 使 devicePath 与 /dev/snd 真实节点（pcmC0D0p）及 scanDevSnd 的规范化路径一致
+            val devicePath = "/dev/snd/pcmC${card.toInt()}D${device.toInt()}"
             val isValid = checkDeviceStatus(card.toInt(), device.toInt())
             channels.add(
                 AudioChannel(
@@ -210,34 +212,37 @@ class ALSAScanner @Inject constructor() {
         }
     }
 
-    private fun scanDevSnd(dir: File, channels: MutableList<AudioChannel>) {
+    /**
+     * 扫描 /dev/snd/ 设备节点（兜底路径：/proc/asound/pcm 不可读时设备列表的唯一来源）。
+     * 节点名形如 pcmC0D0p / pcmC1D2c，方向后缀 p=playback / c=capture；
+     * card+device 唯一确定一块 PCM 设备（p/c 是同一设备的两个子流节点，只保留一条）。
+     */
+    internal fun scanDevSnd(dir: File, channels: MutableList<AudioChannel>) {
         dir.listFiles()?.forEach { file ->
             when {
                 file.name.startsWith("pcmC") -> {
-                    val parts = file.name.removePrefix("pcmC").split("D")
-                    if (parts.size == 2) {
-                        val card = parts[0]
-                        // 只添加有效且可读的设备
-                        val isReadable = file.canRead()
-                        if (isReadable && channels.none { it.devicePath == file.absolutePath }) {
-                            channels.add(
-                                AudioChannel(
-                                    id = "dev-${file.name}",
-                                    name = file.name,
-                                    type = AudioChannelType.UNKNOWN,
-                                    channelConfig = ChannelConfig.UNKNOWN,
-                                    isActive = false, // 占位：由 Repository 基于 getActivePlaybackConfigurations 覆写
-                                    isValid = isReadable,
-                                    devicePath = file.absolutePath,
-                                    cardName = "card$card",
-                                    address = null,
-                                    sampleRate = null,
-                                    bitDepth = null,
-                                    source = ChannelSource.ALSA,
-                                    typeEvidence = ChannelTypeEvidence.INFERRED
-                                )
+                    val node = PCM_NODE_REGEX.matchEntire(file.name) ?: return@forEach
+                    val (card, device) = node.destructured
+                    // 只添加有效且可读的设备
+                    val isReadable = file.canRead()
+                    if (isReadable && !hasPcmNode(channels, card, device)) {
+                        channels.add(
+                            AudioChannel(
+                                id = "dev-${file.name}",
+                                name = file.name,
+                                type = AudioChannelType.UNKNOWN,
+                                channelConfig = ChannelConfig.UNKNOWN,
+                                isActive = false, // 占位：由 Repository 基于 getActivePlaybackConfigurations 覆写
+                                isValid = isReadable,
+                                devicePath = "${dir.path}/pcmC${card}D${device}",
+                                cardName = "card$card",
+                                address = null,
+                                sampleRate = null,
+                                bitDepth = null,
+                                source = ChannelSource.ALSA,
+                                typeEvidence = ChannelTypeEvidence.INFERRED
                             )
-                        }
+                        )
                     }
                 }
                 file.name.startsWith("controlC") -> {
@@ -246,6 +251,20 @@ class ALSAScanner @Inject constructor() {
             }
         }
     }
+
+    /**
+     * 已有通道中是否已存在同一块 PCM 设备（card+device 对上即视为同一设备）。
+     * 按数值比较而非字符串：/proc/asound/pcm 行号是 %02i 补零格式（"00"），
+     * /dev/snd 节点名无前导零（"0"），字符串比较会把同一设备误判为不同设备。
+     * 方向后缀不参与比较——修复前比较带后缀的文件绝对路径与 parsePCM 的
+     * 无后缀路径永不相等，同一设备会重复出现两条通道。
+     */
+    private fun hasPcmNode(channels: List<AudioChannel>, card: String, device: String): Boolean =
+        channels.any { channel ->
+            val match = channel.devicePath?.let { PCM_NODE_REGEX.find(it) } ?: return@any false
+            match.groupValues[1].toIntOrNull() == card.toIntOrNull() &&
+                match.groupValues[2].toIntOrNull() == device.toIntOrNull()
+        }
 
     /**
      * 通道名称/ID 关键词识别，规则见 [ChannelTypeRules.inferTypeFromKeywords]
@@ -260,6 +279,9 @@ class ALSAScanner @Inject constructor() {
         private val HW_RATE_REGEX = Regex("""rate:\s*(\d+)""")
         private val HW_CHANNELS_REGEX = Regex("""channels:\s*(\d+)""")
         private val HW_FORMAT_REGEX = Regex("""format:\s*(\S+)""")
+        // pcmC<card>D<device> 后跟可选方向后缀（p/c），既用于 matchEntire 校验节点文件名，
+        // 也用于 find 提取已有通道 devicePath 中的 card/device
+        private val PCM_NODE_REGEX = Regex("""pcmC(\d+)D(\d+)[pc]?""")
         private val DIGIT_REGEX = Regex("""(\d+)""")
     }
 }
