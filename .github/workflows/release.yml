@@ -1,0 +1,56 @@
+# Release：推送 v* tag 触发，构建 Release APK 并创建 GitHub Release 附产物
+# 无签名凭据时 assembleRelease 产出 unsigned APK（见 app/build.gradle.kts signingConfigs 约定）
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# 同 tag 重推取消旧 run；不同 tag 的 ref 不同、互不影响
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # gh release create 需要
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # 校验 gradle-wrapper.jar 完整性，与 CI 同版本 action
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
+      # 缓存 key 与 CI 相同，命中 CI 已预热依赖加速构建
+      - name: 缓存 Gradle 依赖
+        uses: actions/cache@v6
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ hashFiles('**/*.gradle.kts', '**/gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: 构建 Release APK
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: 重命名产物（带 tag 与 unsigned 标注）
+        run: cp app/build/outputs/apk/release/app-release-unsigned.apk "byd-audio-detect-${GITHUB_REF_NAME}-unsigned.apk"
+
+      - name: 创建 Release 并附 APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Release ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            "byd-audio-detect-${GITHUB_REF_NAME}-unsigned.apk"
