@@ -172,6 +172,11 @@ class MainViewModel @Inject constructor(
      */
     fun buildShareText(): String = ShareReportFormatter.format(_uiState.value.channels)
 
+    /**
+     * 生成格式化 JSON 配置报告，供第三方盒子与自动化脚本解析。
+     */
+    fun buildShareJson(): String = ShareReportFormatter.formatJson(_uiState.value.channels)
+
     private companion object {
         private const val AUTO_REFRESH_INTERVAL_MS = 30_000L
         private const val PLAYBACK_DEBOUNCE_MS = 400L

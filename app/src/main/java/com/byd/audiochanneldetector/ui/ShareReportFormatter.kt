@@ -42,4 +42,51 @@ internal object ShareReportFormatter {
             }
         }
     }
+
+    /**
+     * 将检测到的音频通道格式化为标准 JSON 字符串，供第三方盒子、伴侣程序与自动化脚本解析。
+     */
+    fun formatJson(channels: List<AudioChannel>): String = buildString {
+        appendLine("{")
+        appendLine("  \"version\": \"1.0\",")
+        appendLine("  \"total\": ${channels.size},")
+        appendLine("  \"activeCount\": ${channels.count { it.isActive }},")
+        appendLine("  \"measuredCount\": ${channels.count { it.typeEvidence == ChannelTypeEvidence.MEASURED }},")
+        appendLine("  \"summary\": {")
+        appendLine("    \"media\": ${channels.count { it.type == AudioChannelType.MEDIA }},")
+        appendLine("    \"navigation\": ${channels.count { it.type == AudioChannelType.NAVIGATION }},")
+        appendLine("    \"voiceCall\": ${channels.count { it.type == AudioChannelType.VOICE_CALL }},")
+        appendLine("    \"system\": ${channels.count { it.type == AudioChannelType.SYSTEM }},")
+        appendLine("    \"alarm\": ${channels.count { it.type == AudioChannelType.ALARM }}")
+        appendLine("  },")
+        appendLine("  \"channels\": [")
+        channels.forEachIndexed { index, ch ->
+            appendLine("    {")
+            appendLine("      \"id\": ${escapeJson(ch.id)},")
+            appendLine("      \"name\": ${escapeJson(ch.name)},")
+            appendLine("      \"type\": \"${ch.type.name}\",")
+            appendLine("      \"channelConfig\": \"${ch.channelConfig.name}\",")
+            appendLine("      \"isActive\": ${ch.isActive},")
+            appendLine("      \"isValid\": ${ch.isValid},")
+            ch.address?.let { appendLine("      \"address\": ${escapeJson(it)},") }
+            ch.devicePath?.let { appendLine("      \"devicePath\": ${escapeJson(it)},") }
+            ch.cardName?.let { appendLine("      \"cardName\": ${escapeJson(it)},") }
+            ch.sampleRate?.let { appendLine("      \"sampleRate\": $it,") }
+            ch.bitDepth?.let { appendLine("      \"bitDepth\": $it,") }
+            appendLine("      \"source\": \"${ch.source.name}\",")
+            appendLine("      \"typeEvidence\": \"${ch.typeEvidence.name}\"")
+            val isLast = index == channels.lastIndex
+            appendLine("    }${if (isLast) "" else ","}")
+        }
+        appendLine("  ]")
+        append("}")
+    }
+
+    private fun escapeJson(str: String): String =
+        "\"" + str.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\b", "\\b")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t") + "\""
 }
