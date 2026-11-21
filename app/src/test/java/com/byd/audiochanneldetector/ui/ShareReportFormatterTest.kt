@@ -84,4 +84,62 @@ class ShareReportFormatterTest {
         assertTrue(text.contains("类型: 媒体（推断）"))
         assertTrue(text.contains("实测判定: 1"))
     }
+
+    // ---------------- formatJson ----------------
+
+    @Test
+    fun formatJson_emptyChannels() {
+        val json = ShareReportFormatter.formatJson(emptyList())
+        assertTrue(json.contains("\"version\": \"1.0\""))
+        assertTrue(json.contains("\"total\": 0"))
+        assertTrue(json.contains("\"channels\": [\n  ]"))
+    }
+
+    @Test
+    fun formatJson_containsCountsAndTypes() {
+        val channels = listOf(
+            channel("Media1", AudioChannelType.MEDIA, active = true, evidence = ChannelTypeEvidence.MEASURED),
+            channel("Nav1", AudioChannelType.NAVIGATION)
+        )
+        val json = ShareReportFormatter.formatJson(channels)
+        assertTrue(json.contains("\"total\": 2"))
+        assertTrue(json.contains("\"activeCount\": 1"))
+        assertTrue(json.contains("\"measuredCount\": 1"))
+        assertTrue(json.contains("\"media\": 1"))
+        assertTrue(json.contains("\"navigation\": 1"))
+    }
+
+    @Test
+    fun formatJson_fullChannelProperties() {
+        val ch = channel(
+            "Speaker",
+            type = AudioChannelType.MEDIA,
+            source = ChannelSource.ANDROID,
+            devicePath = "/dev/snd/pcmC0D0p",
+            cardName = "card0",
+            address = "bus0_media",
+            sampleRate = 48000,
+            bitDepth = 16,
+            evidence = ChannelTypeEvidence.MEASURED
+        )
+        val json = ShareReportFormatter.formatJson(listOf(ch))
+        assertTrue(json.contains("\"id\": \"id-Speaker\""))
+        assertTrue(json.contains("\"name\": \"Speaker\""))
+        assertTrue(json.contains("\"type\": \"MEDIA\""))
+        assertTrue(json.contains("\"channelConfig\": \"STEREO\""))
+        assertTrue(json.contains("\"address\": \"bus0_media\""))
+        assertTrue(json.contains("\"devicePath\": \"/dev/snd/pcmC0D0p\""))
+        assertTrue(json.contains("\"cardName\": \"card0\""))
+        assertTrue(json.contains("\"sampleRate\": 48000"))
+        assertTrue(json.contains("\"bitDepth\": 16"))
+        assertTrue(json.contains("\"source\": \"ANDROID\""))
+        assertTrue(json.contains("\"typeEvidence\": \"MEASURED\""))
+    }
+
+    @Test
+    fun formatJson_escapesQuotesAndBackslashes() {
+        val ch = channel("Test \"Quote\" \\Slash")
+        val json = ShareReportFormatter.formatJson(listOf(ch))
+        assertTrue(json.contains("\"name\": \"Test \\\"Quote\\\" \\\\Slash\""))
+    }
 }

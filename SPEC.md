@@ -42,7 +42,8 @@
 - [x] **过滤功能**: 支持按通道类型过滤显示
 - [x] **通道详情页**: 点击卡片弹出 ModalBottomSheet 展示完整字段（来源、活跃、采样率、位深等）与发声测试控制面板
 - [x] **车机大屏/横屏自适应分栏**: 宽度 >= 720dp 自动切换为 Master-Detail 左右双栏，常驻详情与试音面板
-- [x] **检测结果分享**: 经系统分享面板（Intent.ACTION_SEND）导出纯文本报告，无需新权限
+- [x] **检测结果分享与导出**: 经系统分享面板（Intent.ACTION_SEND）导出纯文本报告或标准 JSON 配置，无需新权限
+- [x] **第三方盒子跨进程数据共享**: 内置只读 AudioChannelProvider（content://com.byd.audiochanneldetector.provider/channels），供伴侣工具免交互查询通道路由
 
 ## 4. 数据模型
 

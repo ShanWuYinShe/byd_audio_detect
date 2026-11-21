@@ -14,6 +14,9 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -58,24 +61,51 @@ fun MainScreen(
                     }
                 },
                 actions = {
-                    // 分享检测结果：经系统分享面板 ACTION_SEND 导出纯文本报告，无需任何权限
-                    IconButton(
-                        onClick = {
-                            val shareText = viewModel.buildShareText()
-                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                            }
-                            context.startActivity(
-                                Intent.createChooser(sendIntent, "分享检测结果")
+                    // 分享与导出检测结果：经系统分享面板导出文本或标准 JSON，无需任何权限
+                    var showShareMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(
+                            onClick = { showShareMenu = true },
+                            enabled = uiState.channels.isNotEmpty()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "分享或导出检测结果"
                             )
-                        },
-                        enabled = uiState.channels.isNotEmpty()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "分享检测结果"
-                        )
+                        }
+                        DropdownMenu(
+                            expanded = showShareMenu,
+                            onDismissRequest = { showShareMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("分享纯文本报告") },
+                                onClick = {
+                                    showShareMenu = false
+                                    val shareText = viewModel.buildShareText()
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(sendIntent, "分享检测结果")
+                                    )
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("导出标准 JSON 配置") },
+                                onClick = {
+                                    showShareMenu = false
+                                    val shareJson = viewModel.buildShareJson()
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/json"
+                                        putExtra(Intent.EXTRA_TEXT, shareJson)
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(sendIntent, "导出 JSON 配置")
+                                    )
+                                }
+                            )
+                        }
                     }
                     IconButton(
                         onClick = { viewModel.loadChannels() },
