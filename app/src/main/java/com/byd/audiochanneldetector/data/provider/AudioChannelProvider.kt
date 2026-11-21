@@ -49,9 +49,10 @@ class AudioChannelProvider : ContentProvider() {
                     ctx.applicationContext,
                     ProviderEntryPoint::class.java
                 )
+                val useCase = entryPoint.getAudioChannelsUseCase()
                 val channels: List<AudioChannel> = runCatching {
-                    runBlocking<List<AudioChannel>> {
-                        entryPoint.getAudioChannelsUseCase().first()
+                    runBlocking {
+                        useCase().first()
                     }
                 }.getOrDefault(emptyList())
 
