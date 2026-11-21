@@ -79,4 +79,19 @@ class MainUiLogicTest {
         val removed = channel("gone", "USB DAC")
         assertNull(MainUiLogic.resolveSelectedChannel(removed, channels))
     }
+
+    // ---------------- isWideScreen ----------------
+
+    @Test
+    fun isWideScreen_belowThresholdReturnsFalse() {
+        assertEquals(false, MainUiLogic.isWideScreen(360))
+        assertEquals(false, MainUiLogic.isWideScreen(719))
+    }
+
+    @Test
+    fun isWideScreen_atOrAboveThresholdReturnsTrue() {
+        assertEquals(true, MainUiLogic.isWideScreen(720))
+        assertEquals(true, MainUiLogic.isWideScreen(1080))
+        assertEquals(true, MainUiLogic.isWideScreen(1920))
+    }
 }

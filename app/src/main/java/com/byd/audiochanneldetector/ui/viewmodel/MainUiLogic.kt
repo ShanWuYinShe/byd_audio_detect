@@ -25,4 +25,10 @@ internal object MainUiLogic {
         channels: List<AudioChannel>
     ): AudioChannel? =
         selected?.let { sel -> channels.firstOrNull { it.id == sel.id } }
+
+    /** 大屏/车机横屏双栏自适应门槛宽度 (dp) */
+    const val WIDE_SCREEN_THRESHOLD_DP = 720
+
+    /** 判断当前可用宽度是否达到大屏/横屏双栏展示门槛 */
+    internal fun isWideScreen(widthDp: Int): Boolean = widthDp >= WIDE_SCREEN_THRESHOLD_DP
 }
