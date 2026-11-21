@@ -44,6 +44,7 @@
 - [x] **车机大屏/横屏自适应分栏**: 宽度 >= 720dp 自动切换为 Master-Detail 左右双栏，常驻详情与试音面板
 - [x] **检测结果分享与导出**: 经系统分享面板（Intent.ACTION_SEND）导出纯文本报告或标准 JSON 配置，无需新权限
 - [x] **第三方盒子跨进程数据共享**: 内置只读 AudioChannelProvider（content://com.byd.audiochanneldetector.provider/channels），供伴侣工具免交互查询通道路由
+- [x] **通道事件日志与稳定性监控**: 实时记录设备热插拔（AudioDeviceCallback）、播放流变更（AudioPlaybackCallback）、试音发声与刷新事件时间线，内存环形缓冲最多 50 条
 
 ## 4. 数据模型
 
@@ -89,6 +90,21 @@ enum class ChannelConfig {
     SURROUND_5_1,   // 5.1环绕声
     SURROUND_7_1,   // 7.1环绕声
     UNKNOWN
+}
+
+data class AudioEvent(
+    val id: String,
+    val timestamp: Long,
+    val type: AudioEventType,
+    val message: String
+)
+
+enum class AudioEventType {
+    DEVICE_CONNECTED,
+    DEVICE_DISCONNECTED,
+    PLAYBACK_CHANGE,
+    SOUND_TEST,
+    DETECTION_REFRESH
 }
 ```
 

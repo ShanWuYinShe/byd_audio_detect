@@ -1,6 +1,8 @@
 package com.byd.audiochanneldetector.ui.viewmodel
 
 import android.content.Context
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.AudioPlaybackConfiguration
 import android.os.Handler
@@ -8,8 +10,11 @@ import android.os.Looper
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.byd.audiochanneldetector.data.audio.ChannelSoundPlayer
+import com.byd.audiochanneldetector.data.repository.AudioEventRepository
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
+import com.byd.audiochanneldetector.domain.model.AudioEvent
+import com.byd.audiochanneldetector.domain.model.AudioEventType
 import com.byd.audiochanneldetector.domain.model.ToneMode
 import com.byd.audiochanneldetector.domain.usecase.GetAudioChannelsUseCase
 import com.byd.audiochanneldetector.ui.ShareReportFormatter
@@ -34,13 +39,15 @@ data class MainUiState(
     val selectedFilter: AudioChannelType? = null,
     val selectedChannel: AudioChannel? = null,
     val isPlayingTone: Boolean = false,
-    val playingToneChannelId: String? = null
+    val playingToneChannelId: String? = null,
+    val events: List<AudioEvent> = emptyList()
 )
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val getAudioChannelsUseCase: GetAudioChannelsUseCase,
     private val channelSoundPlayer: ChannelSoundPlayer,
+    private val audioEventRepository: AudioEventRepository,
     @ApplicationContext context: Context
 ) : ViewModel() {
 
@@ -60,7 +67,34 @@ class MainViewModel @Inject constructor(
      */
     private val playbackCallback = object : AudioManager.AudioPlaybackCallback() {
         override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>) {
+            val count = configs.size
+            audioEventRepository.log(
+                AudioEventType.PLAYBACK_CHANGE,
+                "播放状态变化: 当前 $count 路音频流活跃"
+            )
             schedulePlaybackRefresh()
+        }
+    }
+
+    private val deviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+            val count = addedDevices?.size ?: 0
+            val names = addedDevices?.mapNotNull { it.productName?.toString() }?.joinToString(", ") ?: ""
+            audioEventRepository.log(
+                AudioEventType.DEVICE_CONNECTED,
+                "音频设备接入 ($count 台): $names"
+            )
+            triggerRefresh(showLoading = false)
+        }
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+            val count = removedDevices?.size ?: 0
+            val names = removedDevices?.mapNotNull { it.productName?.toString() }?.joinToString(", ") ?: ""
+            audioEventRepository.log(
+                AudioEventType.DEVICE_DISCONNECTED,
+                "音频设备断开 ($count 台): $names"
+            )
+            triggerRefresh(showLoading = false)
         }
     }
 
@@ -68,10 +102,10 @@ class MainViewModel @Inject constructor(
         loadChannels()
         startAutoRefresh()
         observeTonePlayback()
-        audioManager.registerAudioPlaybackCallback(
-            playbackCallback,
-            Handler(Looper.getMainLooper())
-        )
+        observeAudioEvents()
+        val handler = Handler(Looper.getMainLooper())
+        audioManager.registerAudioPlaybackCallback(playbackCallback, handler)
+        audioManager.registerAudioDeviceCallback(deviceCallback, handler)
     }
 
     private fun observeTonePlayback() {
@@ -87,9 +121,18 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    private fun observeAudioEvents() {
+        viewModelScope.launch {
+            audioEventRepository.events.collect { eventList ->
+                _uiState.update { it.copy(events = eventList) }
+            }
+        }
+    }
+
     override fun onCleared() {
         channelSoundPlayer.stop()
         audioManager.unregisterAudioPlaybackCallback(playbackCallback)
+        audioManager.unregisterAudioDeviceCallback(deviceCallback)
         super.onCleared()
     }
 
@@ -126,6 +169,10 @@ class MainViewModel @Inject constructor(
                     }
                 }
                 .collect { channels ->
+                    audioEventRepository.log(
+                        AudioEventType.DETECTION_REFRESH,
+                        "通道刷新完成: 共 ${channels.size} 个通道"
+                    )
                     _uiState.update { state ->
                         state.copy(
                             channels = channels,
@@ -159,6 +206,10 @@ class MainViewModel @Inject constructor(
 
     /** 向指定通道播放测试音频 */
     fun playTone(channel: AudioChannel, mode: ToneMode = ToneMode.STEREO) {
+        audioEventRepository.log(
+            AudioEventType.SOUND_TEST,
+            "对通道 [${channel.name}] 发起试音 (${mode.name})"
+        )
         channelSoundPlayer.play(channel, mode)
     }
 
@@ -167,15 +218,26 @@ class MainViewModel @Inject constructor(
         channelSoundPlayer.stop()
     }
 
+    /** 清空当前记录的事件日志 */
+    fun clearEvents() {
+        audioEventRepository.clear()
+    }
+
     /**
      * 生成可分享的纯文本检测报告，供系统分享面板（Intent.ACTION_SEND）使用，无需任何权限。
      */
-    fun buildShareText(): String = ShareReportFormatter.format(_uiState.value.channels)
+    fun buildShareText(): String = ShareReportFormatter.format(
+        _uiState.value.channels,
+        _uiState.value.events
+    )
 
     /**
      * 生成格式化 JSON 配置报告，供第三方盒子与自动化脚本解析。
      */
-    fun buildShareJson(): String = ShareReportFormatter.formatJson(_uiState.value.channels)
+    fun buildShareJson(): String = ShareReportFormatter.formatJson(
+        _uiState.value.channels,
+        _uiState.value.events
+    )
 
     private companion object {
         private const val AUTO_REFRESH_INTERVAL_MS = 30_000L

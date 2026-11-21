@@ -2,6 +2,8 @@ package com.byd.audiochanneldetector.ui
 
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
+import com.byd.audiochanneldetector.domain.model.AudioEvent
+import com.byd.audiochanneldetector.domain.model.AudioEventType
 import com.byd.audiochanneldetector.domain.model.ChannelConfig
 import com.byd.audiochanneldetector.domain.model.ChannelSource
 import com.byd.audiochanneldetector.domain.model.ChannelTypeEvidence
@@ -141,5 +143,30 @@ class ShareReportFormatterTest {
         val ch = channel("Test \"Quote\" \\Slash")
         val json = ShareReportFormatter.formatJson(listOf(ch))
         assertTrue(json.contains("\"name\": \"Test \\\"Quote\\\" \\\\Slash\""))
+    }
+
+    @Test
+    fun format_withEvents_includesEventLogSection() {
+        val channels = listOf(channel("Speaker"))
+        val events = listOf(
+            AudioEvent(type = AudioEventType.DEVICE_CONNECTED, message = "USB DAC plugged"),
+            AudioEvent(type = AudioEventType.PLAYBACK_CHANGE, message = "Nav playback active")
+        )
+        val text = ShareReportFormatter.format(channels, events)
+        assertTrue(text.contains("----- 最近事件日志 -----"))
+        assertTrue(text.contains("[DEVICE_CONNECTED] USB DAC plugged"))
+        assertTrue(text.contains("[PLAYBACK_CHANGE] Nav playback active"))
+    }
+
+    @Test
+    fun formatJson_withEvents_includesEventsArray() {
+        val channels = listOf(channel("Speaker"))
+        val events = listOf(
+            AudioEvent(type = AudioEventType.SOUND_TEST, message = "Tone played on Speaker")
+        )
+        val json = ShareReportFormatter.formatJson(channels, events)
+        assertTrue(json.contains("\"events\": ["))
+        assertTrue(json.contains("\"type\": \"SOUND_TEST\""))
+        assertTrue(json.contains("\"message\": \"Tone played on Speaker\""))
     }
 }
