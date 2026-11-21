@@ -12,15 +12,15 @@ Android 原生应用，检测比亚迪车机音频通道（识别有效通道、
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ANDROID_HOME="$HOME/Library/Android/sdk"
 ./gradlew assembleDebug --no-daemon        # 编译调试 APK（一律由 GitHub workflow 构建，本地禁止执行）
-./gradlew test --no-daemon                 # 运行单元测试（当前 7 个测试类 72 例，debug 变体；以实跑结果为准）
+./gradlew test --no-daemon                 # 运行单元测试（当前 8 个测试类 78 例，debug 变体；以实跑结果为准）
 ./gradlew lint --no-daemon                 # Lint（Android 默认规则）
 ./gradlew clean                            # 清理构建产物
 ```
 
 Gradle 命令加 `--no-daemon` 的原因见全局 `toolchain-setup` skill（防 Daemon 累积撑爆内存）。
 
-测试：`app/src/test/` 含 `ALSAScannerTest`（类型识别/声道配置/hw_params 解析/设备节点去重）、`ChannelTypeRulesTest`（关键词优先级/usage→类型映射）、`ChannelMergeLogicTest`（跨源去重/设备 key/活跃判定）、`GetAudioChannelsUseCaseTest`（用例层编排）、`ShareReportFormatterTest`（分享报告文本与标准 JSON 格式化）、`MainUiLogicTest`（过滤/详情弹层跟随/大屏自适应阈值）、`ToneGeneratorTest`（正弦波 PCM 采样/左右声道发声生成），共 72 例纯函数单测，`./gradlew test` 运行。
-**测试数量是易腐烂断言**（当前 7 类 72 例；增删测试后同步本处，取数口径 `grep -rh '@Test' app/src/test --include="*.kt" | wc -l`）。插桩测试：`app/src/androidTest/` 含 `AudioChannelRepositoryImplInstrumentedTest`（真行为测试——`AudioDeviceInfo`/`AudioPlaybackConfiguration` 为 final 类无法 mock，故用 `AudioTrack` 播放指定用途静音音频驱动实测判定/累积/优先级路径），`./gradlew connectedDebugAndroidTest` 需连接设备或模拟器运行。
+测试：`app/src/test/` 含 `ALSAScannerTest`（类型识别/声道配置/hw_params 解析/设备节点去重）、`ChannelTypeRulesTest`（关键词优先级/usage→类型映射）、`ChannelMergeLogicTest`（跨源去重/设备 key/活跃判定）、`AudioEventRepositoryTest`（事件记录/环形缓冲容量淘汰/清空）、`GetAudioChannelsUseCaseTest`（用例层编排）、`ShareReportFormatterTest`（分享报告文本、标准 JSON 格式化与事件日志输出）、`MainUiLogicTest`（过滤/详情弹层跟随/大屏自适应阈值）、`ToneGeneratorTest`（正弦波 PCM 采样/左右声道发声生成），共 78 例纯函数单测，`./gradlew test` 运行。
+**测试数量是易腐烂断言**（当前 8 类 78 例；增删测试后同步本处，取数口径 `grep -rh '@Test' app/src/test --include="*.kt" | wc -l`）。插桩测试：`app/src/androidTest/` 含 `AudioChannelRepositoryImplInstrumentedTest`（真行为测试——`AudioDeviceInfo`/`AudioPlaybackConfiguration` 为 final 类无法 mock，故用 `AudioTrack` 播放指定用途静音音频驱动实测判定/累积/优先级路径），`./gradlew connectedDebugAndroidTest` 需连接设备或模拟器运行。
 
 ## CI 门禁与本地验证分工
 
@@ -49,7 +49,7 @@ Gradle 命令加 `--no-daemon` 的原因见全局 `toolchain-setup` skill（防 
 - UI：Jetpack Compose + Material 3。
 - DI：Hilt（`@HiltAndroidApp`、`@AndroidEntryPoint`、`@Module`）。
 - 状态管理：ViewModel + StateFlow，ui 层通过 `collectAsStateWithLifecycle()` 收集。
-- UI 功能：列表 + 类型过滤（`FlowRow` 自适应换行）；大屏/横屏自适应分栏（宽度 >= 720dp 自动切换为 Master-Detail 左右双栏，右栏常驻展示详情与试音面板）；小屏/竖屏点击卡片弹出 `ModalBottomSheet` 展示详情；通道发声测试（双声道/左声道/右声道正弦波发声测试，基于 AudioTrack setPreferredDevice 定向路由）；顶栏导出菜单支持纯文本报告与标准 JSON 配置导出（`Intent.ACTION_SEND`，无新权限）；第三方盒子集成：内置只读 `AudioChannelProvider`（`content://com.byd.audiochanneldetector.provider/channels`）支持跨进程免交互查询通道路由；刷新机制：播放开始/停止经 `AudioPlaybackCallback` 即时触发（400ms 防抖）+ 每 30s 轮询兜底 + 手动刷新；Android 12+ 启用 Material You 动态取色。
+- UI 功能：列表 + 类型过滤（`FlowRow` 自适应换行）；大屏/横屏自适应分栏（宽度 >= 720dp 自动切换为 Master-Detail 左右双栏，右栏常驻展示详情与试音面板）；小屏/竖屏点击卡片弹出 `ModalBottomSheet` 展示详情；通道发声测试（双声道/左声道/右声道正弦波发声测试，基于 AudioTrack setPreferredDevice 定向路由）；顶栏导出菜单支持纯文本报告与标准 JSON 配置导出（`Intent.ACTION_SEND`，无新权限）；第三方盒子集成：内置只读 `AudioChannelProvider`（`content://com.byd.audiochanneldetector.provider/channels`）支持跨进程免交互查询通道路由；通道事件日志与稳定性监控（实时监听热插拔、播放流变更与试音操作，内存环形缓冲最多 50 条）；刷新机制：播放开始/停止经 `AudioPlaybackCallback` 即时触发（400ms 防抖）+ 每 30s 轮询兜底 + 手动刷新；Android 12+ 启用 Material You 动态取色。
 - 展示文案统一：类型/声道/来源文案集中在 `ui/DisplayLabels`，详情页与分享报告共用，避免不一致。
 - 权限：无任何运行时权限（不申明存储/录音/网络权限）；音频信息经 AudioManager 公开 API 与 `/proc`、`/dev/snd` 节点读取。`/proc`、`/dev/snd` 在非 root 设备上可能不可读，结果以 Android API 为主源。
 - Git 忽略：`.gitignore` 至少忽略 `.gradle/`、`.idea/`、`build/`、`local.properties`、`.agents/worktrees/`。

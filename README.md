@@ -11,6 +11,7 @@ Android 原生应用，用于检测比亚迪车机（及通用 Android 设备）
 - **活跃判定与事件驱动刷新**：基于 `AudioManager.getActivePlaybackConfigurations()`（API 31+），低于 31 诚实回落为"未检测到"；播放开始/停止经 `registerAudioPlaybackCallback` 即时触发扫描（带防抖），避免轮询错过短促导航播报。
 - **通道发声测试**：在通道详情中支持通道试音（双声道/左声道/右声道 16-bit PCM 正弦波实时生成，经 `AudioTrack.setPreferredDevice()` 定向路由到目标物理设备），直观验证车机喇叭连通性与声音方位。
 - **第三方盒子集成与导出**：顶栏导出菜单支持纯文本报告与标准 JSON 配置导出；内置只读 `AudioChannelProvider`（`content://com.byd.audiochanneldetector.provider/channels`），供第三方盒子守护进程或 CarPlay/HiCar 转接工具跨进程直接读取通道路由。
+- **通道事件日志与稳定性监控**：实时记录设备热插拔、播放流变更、试音发声与刷新事件时间线，内存环形缓冲最多 50 条，并同步输出至分享报告与 JSON 中。
 - **UI**：Jetpack Compose + Material 3；列表 + 类型过滤；支持车机大屏/横屏自适应分栏（宽度 >= 720dp 自动切换为 Master-Detail 左右双栏，常驻详情与试音面板）；小屏/竖屏点击卡片弹出 ModalBottomSheet；顶栏分享/导出菜单（纯文本与标准 JSON，`Intent.ACTION_SEND`，无需权限）。
 
 ## 构建与测试
@@ -26,7 +27,7 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 
 ### 测试
 
-`./gradlew test` 运行 `testDebugUnitTest`：7 个测试类共 72 例纯函数单测（AGP 9 下不存在 `testReleaseUnitTest` 任务，单测仅在 debug 变体执行）。release 签名凭据通过 `ANDROID_KEYSTORE` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` 环境变量提供，全部设置时 `assembleRelease` 产出签名 APK，否则产出 unsigned APK。
+`./gradlew test` 运行 `testDebugUnitTest`：8 个测试类共 78 例纯函数单测（AGP 9 下不存在 `testReleaseUnitTest` 任务，单测仅在 debug 变体执行）。release 签名凭据通过 `ANDROID_KEYSTORE` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD` 环境变量提供，全部设置时 `assembleRelease` 产出签名 APK，否则产出 unsigned APK。
 
 ## 技术栈
 

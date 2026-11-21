@@ -28,6 +28,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
+import com.byd.audiochanneldetector.domain.model.AudioEvent
+import com.byd.audiochanneldetector.domain.model.AudioEventType
 import com.byd.audiochanneldetector.domain.model.ChannelSource
 import com.byd.audiochanneldetector.domain.model.ToneMode
 import com.byd.audiochanneldetector.ui.DisplayLabels
@@ -180,41 +182,59 @@ fun MainScreen(
                             ) {
                                 val isPlayingThisChannel =
                                     uiState.isPlayingTone && uiState.playingToneChannelId == selected.id
-                                ChannelDetailContent(
-                                    channel = selected,
-                                    isPlayingThisChannel = isPlayingThisChannel,
-                                    onPlayTone = { mode -> viewModel.playTone(selected, mode) },
-                                    onStopTone = { viewModel.stopTone() }
-                                )
+                                Column {
+                                    ChannelDetailContent(
+                                        channel = selected,
+                                        isPlayingThisChannel = isPlayingThisChannel,
+                                        onPlayTone = { mode -> viewModel.playTone(selected, mode) },
+                                        onStopTone = { viewModel.stopTone() }
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    AudioEventLogCard(
+                                        events = uiState.events,
+                                        onClear = { viewModel.clearEvents() }
+                                    )
+                                }
                             }
                         } else {
-                            // 未选择时的车载交互引导
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
+                            // 未选择时的车载交互引导与事件日志展示
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                tonalElevation = 1.dp,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(20.dp)
                             ) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.padding(24.dp)
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
+                                    Spacer(modifier = Modifier.height(16.dp))
                                     Icon(
                                         imageVector = Icons.Default.Info,
                                         contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
+                                        modifier = Modifier.size(44.dp),
                                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                                     )
-                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Spacer(modifier = Modifier.height(10.dp))
                                     Text(
                                         text = "请从左侧选择通道",
                                         style = MaterialTheme.typography.titleMedium,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                     )
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = "选择任一音频通道后，在此查看详细硬件参数与进行定向发声测试",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                         textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                    AudioEventLogCard(
+                                        events = uiState.events,
+                                        onClear = { viewModel.clearEvents() }
                                     )
                                 }
                             }
@@ -245,8 +265,10 @@ fun MainScreen(
                     ChannelDetailSheet(
                         channel = selected,
                         isPlayingThisChannel = isPlayingThisChannel,
+                        events = uiState.events,
                         onPlayTone = { mode -> viewModel.playTone(selected, mode) },
                         onStopTone = { viewModel.stopTone() },
+                        onClearEvents = { viewModel.clearEvents() },
                         onDismiss = { viewModel.selectChannel(null) }
                     )
                 }
@@ -372,8 +394,10 @@ private fun MainContentList(
 private fun ChannelDetailSheet(
     channel: AudioChannel,
     isPlayingThisChannel: Boolean,
+    events: List<AudioEvent>,
     onPlayTone: (ToneMode) -> Unit,
     onStopTone: () -> Unit,
+    onClearEvents: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -393,6 +417,11 @@ private fun ChannelDetailSheet(
                 isPlayingThisChannel = isPlayingThisChannel,
                 onPlayTone = onPlayTone,
                 onStopTone = onStopTone
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            AudioEventLogCard(
+                events = events,
+                onClear = onClearEvents
             )
         }
     }
@@ -616,5 +645,109 @@ fun StatItem(label: String, value: String) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
+    }
+}
+
+@Composable
+fun AudioEventLogCard(
+    events: List<AudioEvent>,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "通道事件日志与稳定性监控",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "实时记录设备热插拔、音频流变更与试音操作",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (events.isNotEmpty()) {
+                    TextButton(onClick = onClear) {
+                        Text("清空")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            if (events.isEmpty()) {
+                Text(
+                    text = "暂无事件（正在监听车机设备插拔与播放状态变化）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            } else {
+                val timeFormat = remember {
+                    java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    events.takeLast(8).reversed().forEach { event ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = timeFormat.format(java.util.Date(event.timestamp)),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.width(55.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = when (event.type) {
+                                    AudioEventType.DEVICE_CONNECTED -> MaterialTheme.colorScheme.primaryContainer
+                                    AudioEventType.DEVICE_DISCONNECTED -> MaterialTheme.colorScheme.errorContainer
+                                    AudioEventType.PLAYBACK_CHANGE -> MaterialTheme.colorScheme.secondaryContainer
+                                    AudioEventType.SOUND_TEST -> MaterialTheme.colorScheme.tertiaryContainer
+                                    AudioEventType.DETECTION_REFRESH -> MaterialTheme.colorScheme.surfaceContainerHighest
+                                },
+                                modifier = Modifier.padding(end = 6.dp)
+                            ) {
+                                Text(
+                                    text = when (event.type) {
+                                        AudioEventType.DEVICE_CONNECTED -> "设备接入"
+                                        AudioEventType.DEVICE_DISCONNECTED -> "设备断开"
+                                        AudioEventType.PLAYBACK_CHANGE -> "播放变化"
+                                        AudioEventType.SOUND_TEST -> "试音测试"
+                                        AudioEventType.DETECTION_REFRESH -> "通道刷新"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                            Text(
+                                text = event.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

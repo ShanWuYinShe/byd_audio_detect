@@ -2,11 +2,18 @@ package com.byd.audiochanneldetector.ui
 
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
+import com.byd.audiochanneldetector.domain.model.AudioEvent
 import com.byd.audiochanneldetector.domain.model.ChannelTypeEvidence
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 internal object ShareReportFormatter {
 
-    fun format(channels: List<AudioChannel>): String = buildString {
+    fun format(
+        channels: List<AudioChannel>,
+        events: List<AudioEvent> = emptyList()
+    ): String = buildString {
         appendLine("比亚迪音频通道检测报告")
         appendLine("BYD Audio Channel Detector")
         appendLine()
@@ -41,12 +48,25 @@ internal object ShareReportFormatter {
                 appendLine("    ID: ${ch.id}")
             }
         }
+
+        if (events.isNotEmpty()) {
+            appendLine()
+            appendLine("----- 最近事件日志 -----")
+            val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            events.takeLast(10).forEach { event ->
+                val time = timeFormat.format(Date(event.timestamp))
+                appendLine("[$time] [${event.type.name}] ${event.message}")
+            }
+        }
     }
 
     /**
      * 将检测到的音频通道格式化为标准 JSON 字符串，供第三方盒子、伴侣程序与自动化脚本解析。
      */
-    fun formatJson(channels: List<AudioChannel>): String = buildString {
+    fun formatJson(
+        channels: List<AudioChannel>,
+        events: List<AudioEvent> = emptyList()
+    ): String = buildString {
         appendLine("{")
         appendLine("  \"version\": \"1.0\",")
         appendLine("  \"total\": ${channels.size},")
@@ -76,6 +96,16 @@ internal object ShareReportFormatter {
             appendLine("      \"source\": \"${ch.source.name}\",")
             appendLine("      \"typeEvidence\": \"${ch.typeEvidence.name}\"")
             val isLast = index == channels.lastIndex
+            appendLine("    }${if (isLast) "" else ","}")
+        }
+        appendLine("  ],")
+        appendLine("  \"events\": [")
+        events.takeLast(10).forEachIndexed { index, ev ->
+            appendLine("    {")
+            appendLine("      \"timestamp\": ${ev.timestamp},")
+            appendLine("      \"type\": \"${ev.type.name}\",")
+            appendLine("      \"message\": ${escapeJson(ev.message)}")
+            val isLast = index == events.takeLast(10).lastIndex
             appendLine("    }${if (isLast) "" else ","}")
         }
         appendLine("  ]")
