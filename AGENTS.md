@@ -12,15 +12,15 @@ Android 原生应用，检测比亚迪车机音频通道（识别有效通道、
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ANDROID_HOME="$HOME/Library/Android/sdk"
 ./gradlew assembleDebug --no-daemon        # 编译调试 APK（一律由 GitHub workflow 构建，本地禁止执行）
-./gradlew test --no-daemon                 # 运行单元测试（当前 6 个测试类 58 例，debug 变体；以实跑结果为准）
+./gradlew test --no-daemon                 # 运行单元测试（当前 6 个测试类 60 例，debug 变体；以实跑结果为准）
 ./gradlew lint --no-daemon                 # Lint（Android 默认规则）
 ./gradlew clean                            # 清理构建产物
 ```
 
 Gradle 命令加 `--no-daemon` 的原因见全局 `toolchain-setup` skill（防 Daemon 累积撑爆内存）。
 
-测试：`app/src/test/` 含 `ALSAScannerTest`（类型识别/声道配置/hw_params 解析/设备节点去重）、`ChannelTypeRulesTest`（关键词优先级/usage→类型映射）、`ChannelMergeLogicTest`（跨源去重/设备 key/活跃判定）、`GetAudioChannelsUseCaseTest`（用例层编排）、`ShareReportFormatterTest`（分享报告格式化）、`MainUiLogicTest`（过滤/详情弹层跟随），共 58 例纯函数单测，`./gradlew test` 运行。
-**测试数量是易腐烂断言**（当前 6 类 58 例；增删测试后同步本处，取数口径 `grep -rh '@Test' app/src/test --include=*.kt | wc -l`）。插桩测试：`app/src/androidTest/` 含 `AudioChannelRepositoryImplInstrumentedTest`（真行为测试——`AudioDeviceInfo`/`AudioPlaybackConfiguration` 为 final 类无法 mock，故用 `AudioTrack` 播放指定用途静音音频驱动实测判定/累积/优先级路径），`./gradlew connectedDebugAndroidTest` 需连接设备或模拟器运行。
+测试：`app/src/test/` 含 `ALSAScannerTest`（类型识别/声道配置/hw_params 解析/设备节点去重）、`ChannelTypeRulesTest`（关键词优先级/usage→类型映射）、`ChannelMergeLogicTest`（跨源去重/设备 key/活跃判定）、`GetAudioChannelsUseCaseTest`（用例层编排）、`ShareReportFormatterTest`（分享报告格式化）、`MainUiLogicTest`（过滤/详情弹层跟随），共 60 例纯函数单测，`./gradlew test` 运行。
+**测试数量是易腐烂断言**（当前 6 类 60 例；增删测试后同步本处，取数口径 `grep -rh '@Test' app/src/test --include="*.kt" | wc -l`）。插桩测试：`app/src/androidTest/` 含 `AudioChannelRepositoryImplInstrumentedTest`（真行为测试——`AudioDeviceInfo`/`AudioPlaybackConfiguration` 为 final 类无法 mock，故用 `AudioTrack` 播放指定用途静音音频驱动实测判定/累积/优先级路径），`./gradlew connectedDebugAndroidTest` 需连接设备或模拟器运行。
 
 ## CI 门禁与本地验证分工
 
