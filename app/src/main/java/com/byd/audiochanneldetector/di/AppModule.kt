@@ -2,6 +2,8 @@ package com.byd.audiochanneldetector.di
 
 import android.content.Context
 import android.media.AudioManager
+import com.byd.audiochanneldetector.data.audio.ChannelSoundPlayer
+import com.byd.audiochanneldetector.data.audio.ChannelSoundPlayerImpl
 import com.byd.audiochanneldetector.data.repository.AudioChannelRepository
 import com.byd.audiochanneldetector.data.repository.AudioChannelRepositoryImpl
 import com.byd.audiochanneldetector.data.scanner.ALSAScanner
@@ -36,5 +38,13 @@ object AppModule {
         audioManager: AudioManager
     ): AudioChannelRepository {
         return AudioChannelRepositoryImpl(context, alsaScanner, audioManager)
+    }
+
+    @Provides
+    @Singleton
+    fun provideChannelSoundPlayer(
+        audioManager: AudioManager
+    ): ChannelSoundPlayer {
+        return ChannelSoundPlayerImpl(audioManager)
     }
 }
