@@ -27,6 +27,7 @@ import com.byd.audiochanneldetector.ui.theme.*
 fun AudioChannelCard(
     channel: AudioChannel,
     modifier: Modifier = Modifier,
+    isSelected: Boolean = false,
     onClick: () -> Unit = {}
 ) {
     val typeColor = when (channel.type) {
@@ -38,15 +39,27 @@ fun AudioChannelCard(
         AudioChannelType.UNKNOWN -> UnknownColor
     }
 
+    val containerColor = if (isSelected) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+    val border = if (isSelected) {
+        androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+    } else {
+        null
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClickLabel = "查看通道详情", onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = containerColor
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = border,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 2.dp)
     ) {
         Row(
             modifier = Modifier
