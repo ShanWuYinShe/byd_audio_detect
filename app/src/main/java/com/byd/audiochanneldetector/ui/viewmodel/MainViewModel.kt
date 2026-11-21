@@ -7,8 +7,10 @@ import android.os.Handler
 import android.os.Looper
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.byd.audiochanneldetector.data.audio.ChannelSoundPlayer
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
+import com.byd.audiochanneldetector.domain.model.ToneMode
 import com.byd.audiochanneldetector.domain.usecase.GetAudioChannelsUseCase
 import com.byd.audiochanneldetector.ui.ShareReportFormatter
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,12 +32,15 @@ data class MainUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val selectedFilter: AudioChannelType? = null,
-    val selectedChannel: AudioChannel? = null
+    val selectedChannel: AudioChannel? = null,
+    val isPlayingTone: Boolean = false,
+    val playingToneChannelId: String? = null
 )
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val getAudioChannelsUseCase: GetAudioChannelsUseCase,
+    private val channelSoundPlayer: ChannelSoundPlayer,
     @ApplicationContext context: Context
 ) : ViewModel() {
 
@@ -62,13 +67,28 @@ class MainViewModel @Inject constructor(
     init {
         loadChannels()
         startAutoRefresh()
+        observeTonePlayback()
         audioManager.registerAudioPlaybackCallback(
             playbackCallback,
             Handler(Looper.getMainLooper())
         )
     }
 
+    private fun observeTonePlayback() {
+        viewModelScope.launch {
+            channelSoundPlayer.isPlaying.collect { playing ->
+                _uiState.update { it.copy(isPlayingTone = playing) }
+            }
+        }
+        viewModelScope.launch {
+            channelSoundPlayer.playingChannelId.collect { id ->
+                _uiState.update { it.copy(playingToneChannelId = id) }
+            }
+        }
+    }
+
     override fun onCleared() {
+        channelSoundPlayer.stop()
         audioManager.unregisterAudioPlaybackCallback(playbackCallback)
         super.onCleared()
     }
@@ -131,7 +151,20 @@ class MainViewModel @Inject constructor(
 
     /** 选中某个通道以展示详情；传 null 关闭详情。 */
     fun selectChannel(channel: AudioChannel?) {
+        if (channel == null) {
+            channelSoundPlayer.stop()
+        }
         _uiState.update { it.copy(selectedChannel = channel) }
+    }
+
+    /** 向指定通道播放测试音频 */
+    fun playTone(channel: AudioChannel, mode: ToneMode = ToneMode.STEREO) {
+        channelSoundPlayer.play(channel, mode)
+    }
+
+    /** 停止测试音频播放 */
+    fun stopTone() {
+        channelSoundPlayer.stop()
     }
 
     /**

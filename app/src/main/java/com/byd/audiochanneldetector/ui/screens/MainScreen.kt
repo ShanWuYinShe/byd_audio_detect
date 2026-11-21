@@ -21,8 +21,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.model.AudioChannelType
+import com.byd.audiochanneldetector.domain.model.ChannelSource
+import com.byd.audiochanneldetector.domain.model.ToneMode
 import com.byd.audiochanneldetector.ui.DisplayLabels
 import com.byd.audiochanneldetector.ui.components.AudioChannelCard
 import com.byd.audiochanneldetector.ui.viewmodel.MainViewModel
@@ -210,8 +213,12 @@ fun MainScreen(
     // 通道详情：点击卡片后弹出 ModalBottomSheet，展示完整信息
     val selected = uiState.selectedChannel
     if (selected != null) {
+        val isPlayingThisChannel = uiState.isPlayingTone && uiState.playingToneChannelId == selected.id
         ChannelDetailSheet(
             channel = selected,
+            isPlayingThisChannel = isPlayingThisChannel,
+            onPlayTone = { mode -> viewModel.playTone(selected, mode) },
+            onStopTone = { viewModel.stopTone() },
             onDismiss = { viewModel.selectChannel(null) }
         )
     }
@@ -221,6 +228,9 @@ fun MainScreen(
 @Composable
 private fun ChannelDetailSheet(
     channel: AudioChannel,
+    isPlayingThisChannel: Boolean,
+    onPlayTone: (ToneMode) -> Unit,
+    onStopTone: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -261,6 +271,102 @@ private fun ChannelDetailSheet(
             channel.cardName?.let { DetailRow(label = "声卡名称", value = it) }
             channel.sampleRate?.let { DetailRow(label = "采样率", value = "${it}Hz") }
             channel.bitDepth?.let { DetailRow(label = "位深", value = "${it}bit") }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 通道试音区域
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "通道发声测试",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (isPlayingThisChannel) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "发声中...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (channel.source == ChannelSource.ANDROID) {
+                        Text(
+                            text = "向该物理通道定向发送 1 秒正弦波音频，用于验证车机喇叭连通性与声道对应关系。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (isPlayingThisChannel) {
+                            Button(
+                                onClick = onStopTone,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Text("停止发声")
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { onPlayTone(ToneMode.STEREO) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("双声道")
+                                }
+                                OutlinedButton(
+                                    onClick = { onPlayTone(ToneMode.LEFT_ONLY) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("仅左声")
+                                }
+                                OutlinedButton(
+                                    onClick = { onPlayTone(ToneMode.RIGHT_ONLY) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("仅右声")
+                                }
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "此通道来自 ALSA 底层设备节点，普通应用在非 root 权限下无法直接定向写入，请选择上方对应的 Android 映射通道进行试音。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
         }
     }
 }
