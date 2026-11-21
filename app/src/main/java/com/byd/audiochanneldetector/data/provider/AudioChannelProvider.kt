@@ -6,6 +6,7 @@ import android.content.UriMatcher
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import com.byd.audiochanneldetector.domain.model.AudioChannel
 import com.byd.audiochanneldetector.domain.usecase.GetAudioChannelsUseCase
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -48,8 +49,10 @@ class AudioChannelProvider : ContentProvider() {
                     ctx.applicationContext,
                     ProviderEntryPoint::class.java
                 )
-                val channels = runCatching {
-                    runBlocking { entryPoint.getAudioChannelsUseCase().first() }
+                val channels: List<AudioChannel> = runCatching {
+                    runBlocking<List<AudioChannel>> {
+                        entryPoint.getAudioChannelsUseCase().first()
+                    }
                 }.getOrDefault(emptyList())
 
                 val cursor = MatrixCursor(COLUMNS)
