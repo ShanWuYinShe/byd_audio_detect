@@ -7,11 +7,11 @@ Android 原生应用，检测比亚迪车机音频通道（识别有效通道、
 
 ## 构建 & 测试
 
-以下命令用于 GitHub workflow；**本地不执行 APK 构建**（含发布产物预备），单测/Lint 仅限排障需要；均不是提交前必跑项，日常验证分工见下一节「CI 门禁与本地验证分工」。
+以下命令用于 GitHub workflow；**本地不做常规构建**，单测/Lint 仅限排障需要；发布产物一律由 CI 构建，日常验证分工见下一节「CI 门禁与本地验证分工」。
 
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ANDROID_HOME="$HOME/Library/Android/sdk"
-./gradlew assembleDebug --no-daemon        # 编译调试 APK（一律由 GitHub workflow 构建，本地禁止执行）
+./gradlew assembleDebug --no-daemon        # 编译调试 APK（常规由 CI 构建；本地排障可临时执行，不作为发布产物）
 ./gradlew test --no-daemon                 # 运行单元测试（当前 8 个测试类 78 例，debug 变体；以实跑结果为准）
 ./gradlew lint --no-daemon                 # Lint（Android 默认规则）
 ./gradlew clean                            # 清理构建产物
@@ -29,7 +29,7 @@ Gradle 命令加 `--no-daemon` 的原因见全局 `toolchain-setup` skill（防 
 全绿 → `gh pr merge --rebase --delete-branch` → 本地 `git pull --ff-only` 并清理 worktree。
 
 - 本地（提交前，秒级）：**不跑 gradle**——本项目所有校验都是 `./gradlew` 任务，单次即分钟级，属重活。
-- **APK 构建一律走 GitHub workflow，本地禁止执行 `assemble*`**：Debug 构建由 ci.yml 的 build job 承担，发布产物由 release.yml 在 tag 推送时构建并附到 GitHub Release——不在本地跑构建（含「发版前预备产物」场景），需要产物就打 tag 触发 release.yml。
+- **APK 构建默认走 GitHub workflow**：Debug 构建由 ci.yml 的 build job 承担，发布产物由 release.yml 在 tag 推送时构建并附到 GitHub Release；本地排障可临时 `./gradlew assembleDebug --no-daemon`（用后清理、不作为发布产物），发版产物仍必须由 tag 触发 release.yml。
   项目未配置可独立运行的格式化工具（无 ktlint/detekt 任务），本地只做文件级检查：
   - `git diff --check`：改动文件无行尾空白、无冲突标记；
   - 文档类改动人工核对其中路径、命令、job 名与项目文件一致；
