@@ -12,15 +12,15 @@ Android 原生应用，检测比亚迪车机音频通道（识别有效通道、
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ANDROID_HOME="$HOME/Library/Android/sdk"
 ./gradlew assembleDebug --no-daemon        # 编译调试 APK（常规由 CI 构建；本地排障可临时执行，不作为发布产物）
-./gradlew test --no-daemon                 # 运行单元测试（当前 8 个测试类 78 例，debug 变体；以实跑结果为准）
+./gradlew test --no-daemon                 # 运行单元测试（例数以 grep -rh '@Test' app/src/test --include="*.kt" | wc -l 现取，debug 变体）
 ./gradlew lint --no-daemon                 # Lint（Android 默认规则）
 ./gradlew clean                            # 清理构建产物
 ```
 
 Gradle 命令加 `--no-daemon` 的原因见全局 `toolchain-setup` skill（防 Daemon 累积撑爆内存）。
 
-测试：`app/src/test/` 含 `ALSAScannerTest`（类型识别/声道配置/hw_params 解析/设备节点去重）、`ChannelTypeRulesTest`（关键词优先级/usage→类型映射）、`ChannelMergeLogicTest`（跨源去重/设备 key/活跃判定）、`AudioEventRepositoryTest`（事件记录/环形缓冲容量淘汰/清空）、`GetAudioChannelsUseCaseTest`（用例层编排）、`ShareReportFormatterTest`（分享报告文本、标准 JSON 格式化与事件日志输出）、`MainUiLogicTest`（过滤/详情弹层跟随/大屏自适应阈值）、`ToneGeneratorTest`（正弦波 PCM 采样/左右声道发声生成），共 78 例纯函数单测，`./gradlew test` 运行。
-**测试数量是易腐烂断言**（当前 8 类 78 例；增删测试后同步本处，取数口径 `grep -rh '@Test' app/src/test --include="*.kt" | wc -l`）。插桩测试：`app/src/androidTest/` 含 `AudioChannelRepositoryImplInstrumentedTest`（真行为测试——`AudioDeviceInfo`/`AudioPlaybackConfiguration` 为 final 类无法 mock，故用 `AudioTrack` 播放指定用途静音音频驱动实测判定/累积/优先级路径），`./gradlew connectedDebugAndroidTest` 需连接设备或模拟器运行。
+测试：`app/src/test/` 含 `ALSAScannerTest`（类型识别/声道配置/hw_params 解析/设备节点去重）、`ChannelTypeRulesTest`（关键词优先级/usage→类型映射）、`ChannelMergeLogicTest`（跨源去重/设备 key/活跃判定）、`AudioEventRepositoryTest`（事件记录/环形缓冲容量淘汰/清空）、`GetAudioChannelsUseCaseTest`（用例层编排）、`ShareReportFormatterTest`（分享报告文本、标准 JSON 格式化与事件日志输出）、`MainUiLogicTest`（过滤/详情弹层跟随/大屏自适应阈值）、`ToneGeneratorTest`（正弦波 PCM 采样/左右声道发声生成），纯函数单测（例数以取数命令现取），`./gradlew test` 运行。
+**测试数量是易腐烂断言**：不在本处写死，运行时用 `grep -rh '@Test' app/src/test --include="*.kt" | wc -l` 现取（增删测试无需改本处）。插桩测试：`app/src/androidTest/` 含 `AudioChannelRepositoryImplInstrumentedTest`（真行为测试——`AudioDeviceInfo`/`AudioPlaybackConfiguration` 为 final 类无法 mock，故用 `AudioTrack` 播放指定用途静音音频驱动实测判定/累积/优先级路径），`./gradlew connectedDebugAndroidTest` 需连接设备或模拟器运行。
 
 ## CI 门禁与本地验证分工
 
