@@ -20,7 +20,7 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" A
 Gradle 命令加 `--no-daemon` 的原因见全局 `toolchain-setup` skill（防 Daemon 累积撑爆内存）。
 
 测试：`app/src/test/` 含 `ALSAScannerTest`（类型识别/声道配置/hw_params 解析/设备节点去重）、`ChannelTypeRulesTest`（关键词优先级/usage→类型映射）、`ChannelMergeLogicTest`（跨源去重/设备 key/活跃判定）、`AudioEventRepositoryTest`（事件记录/环形缓冲容量淘汰/清空）、`GetAudioChannelsUseCaseTest`（用例层编排）、`ShareReportFormatterTest`（分享报告文本、标准 JSON 格式化与事件日志输出）、`MainUiLogicTest`（过滤/详情弹层跟随/大屏自适应阈值）、`ToneGeneratorTest`（正弦波 PCM 采样/左右声道发声生成），纯函数单测（例数以取数命令现取），`./gradlew test` 运行。
-**测试数量是易腐烂断言**：不在本处写死，运行时用 `grep -rh '@Test' app/src/test --include="*.kt" | wc -l` 现取（增删测试无需改本处）。插桩测试：`app/src/androidTest/` 含 `AudioChannelRepositoryImplInstrumentedTest`（真行为测试——`AudioDeviceInfo`/`AudioPlaybackConfiguration` 为 final 类无法 mock，故用 `AudioTrack` 播放指定用途静音音频驱动实测判定/累积/优先级路径），`./gradlew connectedDebugAndroidTest` 需连接设备或模拟器运行。
+**测试数量是易腐烂断言**：不在本处写死，运行时用 `grep -rh '@Test' app/src/test --include="*.kt" | wc -l` 现取（增删测试无需改本处）。插桩测试：`app/src/androidTest/` 含 `AudioChannelRepositoryImplInstrumentedTest`（真行为测试——`AudioDeviceInfo`/`AudioPlaybackConfiguration` 为 final 类无法 mock，故用 `AudioTrack` 播放指定用途静音音频驱动实测判定/累积/优先级路径），`./gradlew connectedDebugAndroidTest` 需连接设备运行：先按全局 skill `android-emulator-debug` 挑选真实设备（`adb devices -l` 状态 `device`、API/ABI 满足 `minSdk`），普通手机真机即可执行；车机音频通道行为结论必须来自目标车机真机。无合格真机时才用模拟器（限制与记录要求见下节「CI 门禁与本地验证分工」）。
 
 ## CI 门禁与本地验证分工
 
@@ -38,9 +38,14 @@ Gradle 命令加 `--no-daemon` 的原因见全局 `toolchain-setup` skill（防 
   wrapper-validation 校验 `gradle-wrapper.jar`；`./gradlew --no-daemon lint test assembleDebug assembleRelease`
   覆盖 Android Lint、debug 变体单元测试、Debug APK 构建、Release 构建（R8/minify + 资源收缩；
   无签名凭据时产出 unsigned APK 且不失败）。
-- CI 覆盖不到、必须本地/真机验证的：`app/src/androidTest/` 的插桩测试
-  （`./gradlew connectedDebugAndroidTest`）需要真机/模拟器，CI 的 ubuntu runner 无设备；
-  仅当改动涉及音频检测/设备相关行为时，先在真机或模拟器执行再合并。
+- CI 覆盖不到、必须真机验证的：`app/src/androidTest/` 的插桩测试
+  （`./gradlew connectedDebugAndroidTest`）需要连接设备，CI 的 ubuntu runner 无设备；
+  仅当改动涉及音频检测/设备相关行为时，先在真机执行再合并。设备按真机优先选择（判定流程见
+  全局 skill `android-emulator-debug`）：先枚举已连接、已授权、API/ABI 兼容的真机，普通手机
+  真机即可跑插桩测试；音频通道行为结论必须来自目标车机真机。无合格真机才用模拟器，在走查记录
+  与 PR 证据写明型号、系统版本、serial（模拟器写 AVD/实例名）及选用原因。
+  模拟器/非 root 真机读不到 `/proc/asound`、`/dev/snd`，通道列表只剩 Android 主源，该限制
+  不代表车机结论（详见 skill byd-audio-detection）。
 
 ## 约束
 
